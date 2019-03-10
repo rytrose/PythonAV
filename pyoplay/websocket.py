@@ -6,7 +6,7 @@ import argparse
 
 
 class WS:
-    def __init__(self, is_client, uri=None, host=None, port=8000):
+    def __init__(self, is_client=False, uri=None, host=None, port=8000):
         self.uri = uri
         self.host = host
         self.port = port
