@@ -22,6 +22,7 @@ class WSServer:
     async def producer_handler(self, websocket):
         while True:
             message = await self.producer()
+            print(f"Sending {message}")
             await websocket.send(message)
 
     async def consumer_handler(self, websocket):
@@ -34,16 +35,17 @@ class WSServer:
                 else:
                     asyncio.ensure_future(self._default_coro(message_dict))
 
-    async def handler(self, websocket, _):
-            producer_task = asyncio.ensure_future(self.producer_handler(websocket))
-            consumer_task = asyncio.ensure_future(self.consumer_handler(websocket))
-            done, pending = await asyncio.wait(
-                [consumer_task, producer_task],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
+    async def handler(self, websocket, path):
+        print(f"Starting to listen at {path}")
+        producer_task = asyncio.ensure_future(self.producer_handler(websocket))
+        consumer_task = asyncio.ensure_future(self.consumer_handler(websocket))
+        done, pending = await asyncio.wait(
+            [consumer_task, producer_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
 
-            for task in pending:
-                task.cancel()
+        for task in pending:
+            task.cancel()
 
     def map(self, address, coro):
         self._callback_map[address] = coro
@@ -56,4 +58,12 @@ class WSServer:
 
     def start(self):
         server_coro = websockets.serve(self.handler, host=self.host, port=self.port)
-        asyncio.ensure_future(server_coro())
+        asyncio.get_event_loop().run_until_complete(server_coro)
+
+        if not asyncio.get_event_loop().is_running():
+            asyncio.get_event_loop().run_forever()
+
+
+if __name__ == '__main__':
+    server = WSServer(None, 8000)
+    server.start()

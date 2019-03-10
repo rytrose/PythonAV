@@ -55,4 +55,11 @@ class WSClient:
         self._send_queue.put(message)
 
     def start(self):
-        asyncio.ensure_future(self.handler())
+        asyncio.get_event_loop().run_until_complete(self.handler)
+
+        if not asyncio.get_event_loop().is_running():
+            asyncio.get_event_loop().run_forever()
+
+if __name__ == '__main__':
+    server = WSClient("ws://rytrose-pi-zero-w.local:8000")
+    server.start()
