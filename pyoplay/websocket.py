@@ -35,7 +35,7 @@ class WS:
 
     async def consumer_handler(self, websocket):
         while True:
-            async for message in websocket:
+                message = await websocket.recv()
                 message_dict = json.loads(message)
                 address = message_dict['address']
                 args = message_dict['args']
@@ -45,16 +45,20 @@ class WS:
                     asyncio.ensure_future(self._default_coro(address, args))
 
     async def client_handler(self):
-        async with websockets.connect(self.uri) as websocket:
-            producer_task = asyncio.ensure_future(self.producer_handler(websocket))
-            consumer_task = asyncio.ensure_future(self.consumer_handler(websocket))
-            done, pending = await asyncio.wait(
-                [consumer_task, producer_task],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
+        while True:
+            try:
+                async with websockets.connect(self.uri) as websocket:
+                    producer_task = asyncio.ensure_future(self.producer_handler(websocket))
+                    consumer_task = asyncio.ensure_future(self.consumer_handler(websocket))
+                    done, pending = await asyncio.wait(
+                        [consumer_task, producer_task],
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
 
-            for task in pending:
-                task.cancel()
+                for task in pending:
+                    task.cancel()
+            except Exception as e:
+                print("WS Exception:", e)
 
     async def server_handler(self, websocket, _):
         print("New connection made.")
