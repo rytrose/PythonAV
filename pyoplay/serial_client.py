@@ -45,8 +45,11 @@ class SerialClient:
                     break
             print("No connected Arduino with device path %s" % device_path)
         else:
-            assert device_index < len(self._arduinos)
-            self._arduinos[device_index].send(address, args)
+            try:
+                assert device_index < len(self._arduinos)
+                self._arduinos[device_index].send(address, args)
+            except AssertionError:
+                pass
 
     def add_command(self, command_name, type_signature, callback=None):
         """Registers a command for CmdMessenger communication with an Arduino.
