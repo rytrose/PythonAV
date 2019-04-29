@@ -12,7 +12,7 @@ class SerialClient:
     the callback functions for all of the expected messages coming from the Arduninos.
     """
 
-    def __init__(self, device_paths=None, baud_rate=9600):
+    def __init__(self, device_paths=None, baud_rate=9600, arduino_params={}):
         """Initializes a SerialClient.
         Args:
             device_paths: A list of device paths of Arduino(s) to attach to.
@@ -28,6 +28,7 @@ class SerialClient:
             "error": print
         }
 
+        self.arduino_params = arduino_params
         self._arduinos = []
 
     def send(self, address, args, device_path=None, device_index=0):
@@ -69,13 +70,16 @@ class SerialClient:
             arduino_paths = glob("/dev/cu.usbmodem*")
             device_path = arduino_paths[0]
             print("No device path specified, defaulting to %s" % device_path)
-            self._arduinos.append(ArduinoClient(device_path, self._commands, self._callbacks, baud_rate=self.baud_rate))
+            self._arduinos.append(ArduinoClient(device_path, self._commands, self._callbacks, baud_rate=self.baud_rate,
+                                                arduino_params=self.arduino_params))
         else:
             for device_path in self.device_paths:
                 if not op.exists(device_path):
                     print("Device path %s not found" % device_path)
                     continue
-                self._arduinos.append(ArduinoClient(device_path, self._commands, self._callbacks, baud_rate=self.baud_rate))
+                self._arduinos.append(
+                    ArduinoClient(device_path, self._commands, self._callbacks, baud_rate=self.baud_rate,
+                                  arduino_params=self.arduino_params))
 
     # def _on_command(self, arduino, args):
     #     """Callback for handling the "command" message.
@@ -91,13 +95,13 @@ class ArduinoClient:
     Reading of the serial connection happens as fast as possible on its own thread.
     """
 
-    def __init__(self, device_path, commands, callbacks, baud_rate=9600):
+    def __init__(self, device_path, commands, callbacks, baud_rate=9600, arduino_params={}):
         """Initializes an ArduinoClient."""
         self.device_path = device_path
         self.commands = commands
         self.callbacks = callbacks
         self.baud_rate = baud_rate
-        self._device = ArduinoBoard(self.device_path, baud_rate=self.baud_rate)
+        self._device = ArduinoBoard(self.device_path, baud_rate=self.baud_rate, **arduino_params)
         self._client = CmdMessenger(self._device, self.commands)
         self._connected = True
         self._read_thread = threading.Thread(target=self._read).start()  # Read from the connection on a new thread.

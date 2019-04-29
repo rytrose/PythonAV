@@ -1,7 +1,7 @@
 from pyo import *
 
 
-class Recorder:
+class AudioRecorder:
     def __init__(self, input, length, processing=None, on_stop=None):
         """Wraps the recording of an input stream.
 
