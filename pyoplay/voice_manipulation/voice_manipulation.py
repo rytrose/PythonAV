@@ -15,7 +15,8 @@ class VoiceManipulation:
     def __init__(self, server_sr, length):
         self.server_sr = server_sr
         self.input = Input()
-        self.pitch_detect = Yin(self.input, minfreq=80, maxfreq=600)
+        self.minfreq = 80
+        self.pitch_detect = Yin(self.input, minfreq=self.minfreq, maxfreq=600)
         self.length = length
         self.pattern = Pattern(self.get_pitch, time=0.01)
         self.recorder = AudioRecorder(
@@ -46,51 +47,53 @@ class VoiceManipulation:
     def stop_receiving_attacks(self):
         self.receive_attacks = False
 
-        self.processed_pitches = []
-        self.processed_pitch_timestamps = []
+        self.processed_pitches = [0]
         self.tolerance = 1.1
         self.pitch_tolerance = 20
         self.length_req = 10
 
         i = 0
         pitches_dropped = 0
-        current_length = 0
-        current_start = 0
+        current_length = 1
+        current_start = 1
+        t = 0
         for pitch, timestamp in zip(self.pitches, self.pitch_timestamps):
-            if 0 < i < len(self.pitches) - 1:
-                if pitch > 0:
+            if 0 < i < len(self.pitches):
+                if pitch > self.minfreq:
                     diff = abs(self.pitches[i - 1] - pitch)
-                    # print(diff)
-                    # import pdb; pdb.set_trace()
                     if diff > self.pitch_tolerance:
                         if current_length > self.length_req:
+                            if current_start == i:
+                                t += 1
                             for j in range(current_start, i):
                                 self.processed_pitches.append(self.pitches[j])
-                                self.processed_pitch_timestamps.append(self.pitch_timestamps[j])
                             current_length = 1
                             current_start = i
                         else:
+                            if current_start == i:
+                                t += 1
                             for j in range(current_start, i):
                                 self.processed_pitches.append(0)
-                                self.processed_pitch_timestamps.append(
-                                    self.pitch_timestamps[j])
                                 pitches_dropped += 1
                             current_length = 1
                             current_start = i
                     else:
                         current_length += 1
                 else:
-                    self.processed_pitches.append(0)
-                    self.processed_pitch_timestamps.append(timestamp)
-                    current_length = 0
+                    for j in range(current_start, i):
+                        self.processed_pitches.append(0)
+                        pitches_dropped += 1
+                    current_length = 1
                     current_start = i
-                    pitches_dropped += 1
             i += 1
 
-        print("Dropped %d estimates." % pitches_dropped)
+        for i in range(current_start, len(self.pitches)):
+            self.processed_pitches.append(0)
+
+        # print("Dropped %d estimates." % pitches_dropped)
 
         self.pitch_contour = Linseg(
-            list(zip(self.processed_pitch_timestamps, self.processed_pitches)), loop=True)
+            list(zip(self.pitch_timestamps, [2 * p for p in self.processed_pitches])), loop=True)
         self.sine = Sine(freq=self.pitch_contour).mix(2).out()
 
     def get_pitch(self):
@@ -119,8 +122,8 @@ class VoiceManipulation:
 
     def plot(self):
         plt.scatter(self.pitch_timestamps, self.pitches, s=1, color="blue")
-        # plt.show()
-        plt.scatter(self.processed_pitch_timestamps, self.processed_pitches, s=1, color="red")
+        plt.scatter(self.pitch_timestamps,
+                    self.processed_pitches, s=1, color="red")
         plt.show()
 
 
