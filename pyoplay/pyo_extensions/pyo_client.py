@@ -3,9 +3,9 @@ from pyo import *
 
 class PyoClient:
     def __init__(self, audio=True, audio_duplex=True, audio_input_device_id=None, audio_output_device_id=None,
-                 prompt_for_audio_devices=False,
+                 prompt_for_audio_devices=False, default_audio_device="audiobox",
                  midi=False, prompt_for_midi_devices=False):
-        self.default_audio_device = "audiobox"
+        self.default_audio_device = default_audio_device
 
         self.audio_server = None
         self.midi_server = None
