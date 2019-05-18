@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from pyo_extensions.audio_recorder import AudioRecorder
 from pyo_extensions.pyo_client import PyoClient
 from pyo_extensions.sample import Sample
+from pyo_extensions.pvsample import PVSample
 
 
 class VoiceManipulation:
@@ -95,6 +96,9 @@ class VoiceManipulation:
         self.pitch_contour = Linseg(
             list(zip(self.pitch_timestamps, [2 * p for p in self.processed_pitches])), loop=True)
         self.sine = Sine(freq=self.pitch_contour).mix(2).out()
+        self.playback = PVSample(table=self.recorder.record_table)
+        self.pitch_contour.play()
+        self.playback.play()
 
     def get_pitch(self):
         self.pitch_timestamps.append(self.ctr.get() / self.server_sr)
