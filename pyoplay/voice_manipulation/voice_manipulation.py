@@ -16,7 +16,7 @@ class VoiceManipulation:
     def __init__(self, server_sr, length):
         self.server_sr = server_sr
         self.input = Input()
-        self.minfreq = 80
+        self.minfreq = 50
         self.pitch_detect = Yin(self.input, minfreq=self.minfreq, maxfreq=600)
         self.length = length
         self.pattern = Pattern(self.get_pitch, time=0.01)
@@ -29,9 +29,9 @@ class VoiceManipulation:
 
         # self.granule_length = int(0.05 * self.server_sr)
         # self.granule_table = None
-        # self.attack_detector = AttackDetector(self.input)
-        # self.receive_attacks = False
-        # self.attack_func = TrigFunc(self.attack_detector, self.receive_attack)
+        self.attack_detector = AttackDetector(self.input)
+        self.receive_attacks = False
+        self.attack_func = TrigFunc(self.attack_detector, self.receive_attack)
 
         self.ctr_trig = Trig()
         self.ctr = Count(self.ctr_trig)
@@ -39,19 +39,21 @@ class VoiceManipulation:
         self.pitches = []
         self.pitch_timestamps = []
         self.attacks = []
+        self.attack_timestamps = []
         self.pitch_contour = None
 
     def receive_attack(self):
         if self.receive_attacks:
-            self.attacks.append(self.ctr.get() / self.server_sr)
+            self.attacks.append(self.pitch_detect.get())
+            self.attack_timestamps.append(self.ctr.get() / self.server_sr)
 
     def stop_receiving_attacks(self):
         self.receive_attacks = False
 
         self.processed_pitches = [0]
         self.tolerance = 1.1
-        self.pitch_tolerance = 20
-        self.length_req = 10
+        self.pitch_tolerance = 50
+        self.length_req = 8
 
         i = 0
         pitches_dropped = 0
@@ -60,7 +62,7 @@ class VoiceManipulation:
         t = 0
         for pitch, timestamp in zip(self.pitches, self.pitch_timestamps):
             if 0 < i < len(self.pitches):
-                if pitch > self.minfreq:
+                if pitch > self.minfreq + 40:
                     diff = abs(self.pitches[i - 1] - pitch)
                     if diff > self.pitch_tolerance:
                         if current_length > self.length_req:
@@ -117,17 +119,11 @@ class VoiceManipulation:
         self.ctr_trig.play()
         self.recorder.record()
 
-        # self.pattern.play()
-        # self.sample.play()
-        # time.sleep(4)
-        # self.pattern.stop()
-        # self.stop_receiving_attacks()
-        # # self.plot()
-
     def plot(self):
         plt.scatter(self.pitch_timestamps, self.pitches, s=1, color="blue")
         plt.scatter(self.pitch_timestamps,
                     self.processed_pitches, s=1, color="red")
+        plt.scatter(self.attack_timestamps, self.attacks, s=12, marker='^', color="green")
         plt.show()
 
 
