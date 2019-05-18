@@ -51,7 +51,7 @@ class Looper:
         self.audio_recording_object.record()
 
     def save(self):
-        self.audio_recording_object.get_table().save("test%d.wav" % self.i)
+        self.audio_recording_object.get_table_copy().save("test%d.wav" % self.i)
         self.i += 1
 
     def change_metro_tempo(self, new_tempo):
@@ -71,7 +71,7 @@ class Looper:
                     if self.recording:  # stop recording
                         self.recording = False
                         self.saved_recordings.append(
-                            self.audio_recording_object.get_table())
+                            self.audio_recording_object.get_table_copy())
                         if self.playing_recording:
                             self.playing_recording.stop()
                         self.playing_recording = TableRead(self.saved_recordings[-1],
