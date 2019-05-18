@@ -23,12 +23,6 @@ class VoiceManipulation:
         self.recorder = AudioRecorder(
             self.input, self.length, on_stop=self.stop_receiving_attacks, pattern=self.pattern)
 
-        # self.sample = Sample(path="voice.wav")
-        # self.pitch_detect = Yin(self.sample.table_reader,
-        #                         minfreq=80, maxfreq=600)
-
-        # self.granule_length = int(0.05 * self.server_sr)
-        # self.granule_table = None
         self.attack_detector = AttackDetector(self.input)
         self.receive_attacks = False
         self.attack_func = TrigFunc(self.attack_detector, self.receive_attack)
