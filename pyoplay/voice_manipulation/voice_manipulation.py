@@ -10,6 +10,7 @@ from pyo_extensions.audio_recorder import AudioRecorder
 from pyo_extensions.pyo_client import PyoClient
 from pyo_extensions.sample import Sample
 from pyo_extensions.pvsample import PVSample
+from communication.osc_client import OSCClient
 
 
 class VoiceManipulation:
@@ -35,6 +36,7 @@ class VoiceManipulation:
         self.attacks = []
         self.attack_timestamps = []
         self.pitch_contour = None
+        self.playback = None
 
     def receive_attack(self):
         if self.receive_attacks:
@@ -89,12 +91,11 @@ class VoiceManipulation:
 
         # print("Dropped %d estimates." % pitches_dropped)
 
+        self.pitch_timestamps[0] = 0
         self.pitch_contour = Linseg(
             list(zip(self.pitch_timestamps, [2 * p for p in self.processed_pitches])), loop=True)
         self.sine = Sine(freq=self.pitch_contour).mix(2).out()
         self.playback = PVSample(table=self.recorder.record_table)
-        self.pitch_contour.play()
-        self.playback.play()
 
     def get_pitch(self):
         self.pitch_timestamps.append(self.ctr.get() / self.server_sr)
@@ -102,26 +103,72 @@ class VoiceManipulation:
 
     def play(self):
         self.pitch_contour.play()
+        self.playback.set_phase(0)
+        self.playback.play()
 
     def stop(self):
         self.pitch_contour.stop()
+        self.playback.stop()
 
     def record(self):
+        self.speed = 1 / self.recorder.length
+        self.transposition = 1
         self.pitches = []
+        self.pitch_timestamps = []
         self.attacks = []
+        self.attack_timestamps = []
         self.receive_attacks = True
         self.ctr_trig.play()
         self.recorder.record()
+
+    def change_pitch_contour(self, speed=None, transposition=None):
+        if self.playback:
+            if speed:
+                self.speed = speed
+            if transposition:
+                self.transposition = transposition
+            factor = self.speed / self.recorder.length
+            new_timestamps = [t * (1 / factor) for t in self.pitch_timestamps]
+            new_pitches = [p * self.transposition
+                           for p in self.processed_pitches]
+            self.pitch_contour.setList(
+                list(zip(new_timestamps, [2 * p for p in new_pitches])))
+            self.playback.set_speed(self.speed)
+            self.playback.set_transposition(self.transposition)
 
     def plot(self):
         plt.scatter(self.pitch_timestamps, self.pitches, s=1, color="blue")
         plt.scatter(self.pitch_timestamps,
                     self.processed_pitches, s=1, color="red")
-        plt.scatter(self.attack_timestamps, self.attacks, s=12, marker='^', color="green")
+        plt.scatter(self.attack_timestamps, self.attacks,
+                    s=12, marker='^', color="green")
         plt.show()
 
 
 if __name__ == "__main__":
     c = PyoClient(default_audio_device="built-in")
     v = VoiceManipulation(c.audio_server.getSamplingRate(), 4.0)
-    v.record()
+
+    def on_record(addess, args):
+        print("Recording...")
+        v.record()
+
+    def on_set_speed(address, speed):
+        v.change_pitch_contour(speed=speed)
+
+    def on_set_transposition(address, transposition):
+        v.change_pitch_contour(transposition=transposition)
+
+    def on_play(addess, args):
+        v.play()
+
+    def on_stop(address, args):
+        v.stop()
+
+    osc_client = OSCClient()
+    osc_client.map("/record", on_record)
+    osc_client.map("/set_speed", on_set_speed)
+    osc_client.map("/set_transposition", on_set_transposition)
+    osc_client.map("/play", on_play)
+    osc_client.map("/stop", on_stop)
+    osc_client.begin()
