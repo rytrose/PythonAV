@@ -127,7 +127,7 @@ class VoiceManipulation:
                 self.speed = speed
             if transposition:
                 self.transposition = transposition
-            factor = self.speed / self.recorder.length
+            factor = self.speed * self.recorder.length
             new_timestamps = [t * (1 / factor) for t in self.pitch_timestamps]
             new_pitches = [p * self.transposition
                            for p in self.processed_pitches]
