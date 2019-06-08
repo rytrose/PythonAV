@@ -2,7 +2,7 @@ from pyo import *
 
 
 class PyoClient:
-    def __init__(self, audio=True, audio_duplex=True, audio_input_device_id=None, audio_output_device_id=None,
+    def __init__(self, audio_backend='portaudio', audio=True, audio_duplex=True, audio_input_device_id=None, audio_output_device_id=None,
                  prompt_for_audio_devices=False, default_audio_device="audiobox",
                  midi=False, prompt_for_midi_devices=False):
         self.default_audio_device = default_audio_device
@@ -12,7 +12,7 @@ class PyoClient:
         self.midi_device_ids = None
 
         if audio:
-            self.setup_audio(duplex=audio_duplex, prompt_for_devices=prompt_for_audio_devices,
+            self.setup_audio(audio_backend=audio_backend, duplex=audio_duplex, prompt_for_devices=prompt_for_audio_devices,
                              input_device_id=audio_input_device_id, output_device_id=audio_output_device_id)
             if midi:
                 self.setup_midi(prompt_for_devices=prompt_for_midi_devices)
@@ -24,11 +24,11 @@ class PyoClient:
             if midi:
                 self.setup_midi(prompt_for_devices=prompt_for_midi_devices)
 
-    def setup_audio(self, duplex=True, prompt_for_devices=False, input_device_id=None, output_device_id=None):
+    def setup_audio(self, audio_backend='portaudio', duplex=True, prompt_for_devices=False, input_device_id=None, output_device_id=None):
         input_devices, output_devices = pa_get_devices_infos()
 
         if duplex:
-            self.audio_server = Server()
+            self.audio_server = Server(audio=audio_backend)
 
             if input_device_id and output_device_id:
                 self.audio_server.setInputDevice(input_device_id)
@@ -75,7 +75,7 @@ class PyoClient:
                     print("Audio input device %s connected." % input_devices[input_device_id]['name'])
                     print("Audio output device %s connected." % output_devices[output_device_id]['name'])
         else:
-            self.audio_server = Server(duplex=0)
+            self.audio_server = Server(audio=audio_backend, duplex=0)
             if output_device_id:
                 self.audio_server.setOutputDevice(output_device_id)
                 print("Audio output device %s connected." % output_devices[output_device_id]['name'])
