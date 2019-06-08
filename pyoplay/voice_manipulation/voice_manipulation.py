@@ -146,7 +146,7 @@ class VoiceManipulation:
 
 
 if __name__ == "__main__":
-    c = PyoClient(default_audio_device="built-in")
+    c = PyoClient(audio_backend="jack", default_audio_device="built-in")
     v = VoiceManipulation(c.audio_server.getSamplingRate(), 4.0)
 
     def on_record(addess, args):
