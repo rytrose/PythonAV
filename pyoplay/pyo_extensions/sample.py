@@ -14,5 +14,5 @@ class Sample:
 
         self.table_reader = TableRead(self.table, freq=1 / self.duration)
 
-    def play(self):
-        self.table_reader.out()
+    def play(self, channel=0):
+        self.table_reader.out(channel)

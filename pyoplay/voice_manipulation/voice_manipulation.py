@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from pyo_extensions.audio_recorder import AudioRecorder
 from pyo_extensions.pyo_client import PyoClient
 from pyo_extensions.sample import Sample
-from pyo_extensions.pvsample import PVSample
+# from pyo_extensions.pvsample import PVSample
 from communication.osc_client import OSCClient
 
 
@@ -20,13 +20,13 @@ class VoiceManipulation:
         self.minfreq = 50
         self.pitch_detect = Yin(self.input, minfreq=self.minfreq, maxfreq=600)
         self.length = length
-        self.pattern = Pattern(self.get_pitch, time=0.01)
+        self.pattern = Pattern(self.get_pitch, time=0.05)
         self.recorder = AudioRecorder(
             self.input, self.length, on_stop=self.stop_receiving_attacks, pattern=self.pattern)
 
-        self.attack_detector = AttackDetector(self.input)
+        # self.attack_detector = AttackDetector(self.input)
         self.receive_attacks = False
-        self.attack_func = TrigFunc(self.attack_detector, self.receive_attack)
+        # self.attack_func = TrigFunc(self.attack_detector, self.receive_attack)
 
         self.ctr_trig = Trig()
         self.ctr = Count(self.ctr_trig)
@@ -89,13 +89,14 @@ class VoiceManipulation:
         for i in range(current_start, len(self.pitches)):
             self.processed_pitches.append(0)
 
-        # print("Dropped %d estimates." % pitches_dropped)
+        print("Dropped %d estimates." % pitches_dropped)
 
         self.pitch_timestamps[0] = 0
         self.pitch_contour = Linseg(
-            list(zip(self.pitch_timestamps, [2 * p for p in self.processed_pitches])), loop=True)
-        self.sine = Sine(freq=self.pitch_contour).mix(2).out()
-        self.playback = PVSample(table=self.recorder.record_table)
+            list(zip(self.pitch_timestamps, [2 * p for p in self.pitches])), loop=True)
+        self.sine = Sine(freq=self.pitch_contour).out(1)
+        # self.playback = PVSample(table=self.recorder.record_table)
+        self.playback = Sample(table=self.recorder.record_table)
 
     def get_pitch(self):
         self.pitch_timestamps.append(self.ctr.get() / self.server_sr)
@@ -103,7 +104,7 @@ class VoiceManipulation:
 
     def play(self):
         self.pitch_contour.play()
-        self.playback.set_phase(0)
+        # self.playback.set_phase(0)
         self.playback.play()
 
     def stop(self):
