@@ -33,7 +33,7 @@ class Sample:
                     if parallel_processing:
                         node = effect(self.table_reader, **kwargs).out()
                     else:
-                        node = effect(self.signal_chain[i-1], **kwargs).out()
+                        node = effect(self.signal_chain[i - 1], **kwargs).out()
                     self.signal_chain.append(node)
                 else:
                     node = effect(self.table_reader, **kwargs).out()
