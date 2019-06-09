@@ -45,5 +45,8 @@ class Sample:
         else:
             self.table_reader.out()
 
+    def stop(self):
+        self.table_reader.stop()
+
     def set_loop(self, loop):
         self.table_reader.setLoop(loop)

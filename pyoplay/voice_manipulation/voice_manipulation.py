@@ -11,6 +11,7 @@ from pyo_extensions.pyo_client import PyoClient
 from pyo_extensions.sample import Sample
 # from pyo_extensions.pvsample import PVSample
 from communication.osc_client import OSCClient
+from gpiozero import MCP3008
 
 
 class VoiceManipulation:
@@ -20,9 +21,10 @@ class VoiceManipulation:
         self.minfreq = 50
         self.pitch_detect = Yin(self.input, minfreq=self.minfreq, maxfreq=600)
         self.length = length
-        self.pattern = Pattern(self.get_pitch, time=0.05)
+        self.pitch_detect_pattern = Pattern(self.get_pitch, time=0.05)
+        self.transpo_pattern = Pattern(self.get_transpo, time=0.2)
         self.recorder = AudioRecorder(
-            self.input, self.length, on_stop=self.stop_receiving_attacks, pattern=self.pattern)
+            self.input, self.length, on_stop=self.stop_receiving_attacks, pattern=self.pitch_detect_pattern)
 
         # self.attack_detector = AttackDetector(self.input)
         self.receive_attacks = False
@@ -37,6 +39,9 @@ class VoiceManipulation:
         self.attack_timestamps = []
         self.pitch_contour = None
         self.playback = None
+
+        self.pot_0 = MCP3008(channel=0)
+        self.pot_1 = MCP3008(channel=1)
 
     def receive_attack(self):
         if self.receive_attacks:
@@ -94,22 +99,42 @@ class VoiceManipulation:
         self.pitch_timestamps[0] = 0
         self.pitch_contour = Linseg(
             list(zip(self.pitch_timestamps, [2 * p for p in self.pitches])), loop=True)
-        self.sine = Sine(freq=self.pitch_contour).out(1)
+        # self.sine = Sine(freq=self.pitch_contour).out()
         # self.playback = PVSample(table=self.recorder.record_table)
-        self.playback = Sample(table=self.recorder.record_table)
+        self.playback = Sample(table=self.recorder.record_table, 
+            processing=[(Harmonizer, {"transpo": 0}), (Harmonizer, {"transpo": 0})], loop=1)
+        self.play()
 
     def get_pitch(self):
         self.pitch_timestamps.append(self.ctr.get() / self.server_sr)
         self.pitches.append(self.pitch_detect.get())
 
+    def get_transpo(self):
+        pot_0_val = abs(1 - self.pot_0.value)
+        pot_1_val = abs(1 - self.pot_1.value)
+
+        transpo_0 = math.floor((pot_0_val * 24) - 12)
+        transpo_1 = math.floor((pot_1_val * 24) - 12)
+
+        if abs(self.playback.signal_chain[0].transpo - transpo_0) > 0.1:
+            print("Setting voice 0 to %f" % transpo_0)
+            self.playback.signal_chain[0].setTranspo(transpo_0)
+
+        if abs(self.playback.signal_chain[1].transpo - transpo_1) > 0.1:
+            print("Setting voice 1 to %f" % transpo_1)
+            self.playback.signal_chain[1].setTranspo(transpo_1)
+
+
     def play(self):
         self.pitch_contour.play()
         # self.playback.set_phase(0)
         self.playback.play()
+        self.transpo_pattern.play()
 
     def stop(self):
         self.pitch_contour.stop()
         self.playback.stop()
+        self.transpo_pattern.stop()
 
     def record(self):
         self.speed = 1 / self.recorder.length
@@ -150,26 +175,26 @@ if __name__ == "__main__":
     c = PyoClient(audio_backend="jack", default_audio_device="built-in")
     v = VoiceManipulation(c.audio_server.getSamplingRate(), 4.0)
 
-    def on_record(addess, args):
-        print("Recording...")
-        v.record()
+    # def on_record(addess, args):
+    #     print("Recording...")
+    #     v.record()
 
-    def on_set_speed(address, speed):
-        v.change_pitch_contour(speed=speed)
+    # def on_set_speed(address, speed):
+    #     v.change_pitch_contour(speed=speed)
 
-    def on_set_transposition(address, transposition):
-        v.change_pitch_contour(transposition=transposition)
+    # def on_set_transposition(address, transposition):
+    #     v.change_pitch_contour(transposition=transposition)
 
-    def on_play(addess, args):
-        v.play()
+    # def on_play(addess, args):
+    #     v.play()
 
-    def on_stop(address, args):
-        v.stop()
+    # def on_stop(address, args):
+    #     v.stop()
 
-    osc_client = OSCClient()
-    osc_client.map("/record", on_record)
-    osc_client.map("/set_speed", on_set_speed)
-    osc_client.map("/set_transposition", on_set_transposition)
-    osc_client.map("/play", on_play)
-    osc_client.map("/stop", on_stop)
-    osc_client.begin()
+    # osc_client = OSCClient()
+    # osc_client.map("/record", on_record)
+    # osc_client.map("/set_speed", on_set_speed)
+    # osc_client.map("/set_transposition", on_set_transposition)
+    # osc_client.map("/play", on_play)
+    # osc_client.map("/stop", on_stop)
+    # osc_client.begin()
