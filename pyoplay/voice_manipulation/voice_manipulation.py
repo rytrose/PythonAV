@@ -11,8 +11,11 @@ from pyo_extensions.pyo_client import PyoClient
 from pyo_extensions.sample import Sample
 # from pyo_extensions.pvsample import PVSample
 from communication.osc_client import OSCClient
-from gpiozero import MCP3008
+from pi_gpio.pi_gpio import PiGPIO
 
+from gpiozero import MCP3008
+import threading
+from multiprocessing import Pipe
 
 class VoiceManipulation:
     def __init__(self, server_sr, length):
@@ -40,8 +43,12 @@ class VoiceManipulation:
         self.pitch_contour = None
         self.playback = None
 
-        self.pot_0 = MCP3008(channel=0)
-        self.pot_1 = MCP3008(channel=1)
+        # self.pot_0 = MCP3008(channel=0)
+        # self.pot_1 = MCP3008(channel=1)
+        self.gpio_conn, c = Pipe()
+        self.pi_io = PiGPIO(c)
+        self.pi_io.start()
+        self.gpio_recv_thread = threading.Thread(target=self.get_io)
 
     def receive_attack(self):
         if self.receive_attacks:
@@ -124,12 +131,27 @@ class VoiceManipulation:
             print("Setting voice 1 to %f" % transpo_1)
             self.playback.signal_chain[1].setTranspo(transpo_1)
 
+    def get_io(self):
+        while True:
+            res = self.gpio_conn.recv()
+
+            transpo_0 = res["transpo_0"]
+            transpo_1 = res["transpo_1"]
+
+            if abs(self.playback.signal_chain[0].transpo - transpo_0) > 0.1:
+                print("Setting voice 0 to %f" % transpo_0)
+                self.playback.signal_chain[0].setTranspo(transpo_0)
+
+            if abs(self.playback.signal_chain[1].transpo - transpo_1) > 0.1:
+                print("Setting voice 1 to %f" % transpo_1)
+                self.playback.signal_chain[1].setTranspo(transpo_1)
 
     def play(self):
         self.pitch_contour.play()
         # self.playback.set_phase(0)
         self.playback.play()
-        self.transpo_pattern.play()
+        # self.transpo_pattern.play()
+        self.gpio_recv_thread.start()
 
     def stop(self):
         self.pitch_contour.stop()
