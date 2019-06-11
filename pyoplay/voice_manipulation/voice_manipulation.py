@@ -9,13 +9,10 @@ import matplotlib.pyplot as plt
 from pyo_extensions.audio_recorder import AudioRecorder
 from pyo_extensions.pyo_client import PyoClient
 from pyo_extensions.sample import Sample
-# from pyo_extensions.pvsample import PVSample
 from communication.osc_client import OSCClient
-from pi_gpio.pi_gpio import PiGPIO
+from pi_gpio.pi_gpio import PiGPIO, PiGPIOConfig
+from utils.stoppable_thread import StoppableThread
 
-from gpiozero import MCP3008
-import threading
-from multiprocessing import Pipe
 
 class VoiceManipulation:
     def __init__(self, server_sr, length):
@@ -25,7 +22,6 @@ class VoiceManipulation:
         self.pitch_detect = Yin(self.input, minfreq=self.minfreq, maxfreq=600)
         self.length = length
         self.pitch_detect_pattern = Pattern(self.get_pitch, time=0.05)
-        self.transpo_pattern = Pattern(self.get_transpo, time=0.2)
         self.recorder = AudioRecorder(
             self.input, self.length, on_stop=self.stop_receiving_attacks, pattern=self.pitch_detect_pattern)
 
@@ -43,12 +39,11 @@ class VoiceManipulation:
         self.pitch_contour = None
         self.playback = None
 
-        # self.pot_0 = MCP3008(channel=0)
-        # self.pot_1 = MCP3008(channel=1)
-        self.gpio_conn, c = Pipe()
-        self.pi_io = PiGPIO(c)
-        self.pi_io.start()
-        self.gpio_recv_thread = threading.Thread(target=self.get_io)
+        self.pi_gpio = PiGPIO()
+        self.pi_gpio.add_gpio(PiGPIOConfig("pot_0", "analog", channel=0))
+        self.pi_gpio.add_gpio(PiGPIOConfig("pot_1", "analog", channel=1))
+        self.pi_gpio.start()
+
 
     def receive_attack(self):
         if self.receive_attacks:
@@ -106,8 +101,7 @@ class VoiceManipulation:
         self.pitch_timestamps[0] = 0
         self.pitch_contour = Linseg(
             list(zip(self.pitch_timestamps, [2 * p for p in self.pitches])), loop=True)
-        # self.sine = Sine(freq=self.pitch_contour).out()
-        # self.playback = PVSample(table=self.recorder.record_table)
+        self.sine = Sine(freq=self.pitch_contour).out()
         self.playback = Sample(table=self.recorder.record_table, 
             processing=[(Harmonizer, {"transpo": 0}), (Harmonizer, {"transpo": 0})], loop=1)
         self.play()
@@ -116,27 +110,13 @@ class VoiceManipulation:
         self.pitch_timestamps.append(self.ctr.get() / self.server_sr)
         self.pitches.append(self.pitch_detect.get())
 
-    def get_transpo(self):
-        pot_0_val = abs(1 - self.pot_0.value)
-        pot_1_val = abs(1 - self.pot_1.value)
-
-        transpo_0 = math.floor((pot_0_val * 24) - 12)
-        transpo_1 = math.floor((pot_1_val * 24) - 12)
-
-        if abs(self.playback.signal_chain[0].transpo - transpo_0) > 0.1:
-            print("Setting voice 0 to %f" % transpo_0)
-            self.playback.signal_chain[0].setTranspo(transpo_0)
-
-        if abs(self.playback.signal_chain[1].transpo - transpo_1) > 0.1:
-            print("Setting voice 1 to %f" % transpo_1)
-            self.playback.signal_chain[1].setTranspo(transpo_1)
-
     def get_io(self):
-        while True:
-            res = self.gpio_conn.recv()
+        while not self.gpio_listen_thread.should_stop():
+            pot_0_val = abs(1 - self.pi_gpio.get_value("pot_0"))
+            pot_1_val = abs(1 - self.pi_gpio.get_value("pot_1"))
 
-            transpo_0 = res["transpo_0"]
-            transpo_1 = res["transpo_1"]
+            transpo_0 = math.floor((pot_0_val * 24) - 12)
+            transpo_1 = math.floor((pot_1_val * 24) - 12)
 
             if abs(self.playback.signal_chain[0].transpo - transpo_0) > 0.1:
                 print("Setting voice 0 to %f" % transpo_0)
@@ -147,16 +127,15 @@ class VoiceManipulation:
                 self.playback.signal_chain[1].setTranspo(transpo_1)
 
     def play(self):
-        self.pitch_contour.play()
-        # self.playback.set_phase(0)
+        # self.pitch_contour.play()
         self.playback.play()
-        # self.transpo_pattern.play()
-        self.gpio_recv_thread.start()
+        self.gpio_listen_thread = StoppableThread(target=self.get_io)
+        self.gpio_listen_thread.start()
 
     def stop(self):
-        self.pitch_contour.stop()
+        # self.pitch_contour.stop()
         self.playback.stop()
-        self.transpo_pattern.stop()
+        self.gpio_listen_thread.stop()
 
     def record(self):
         self.speed = 1 / self.recorder.length
