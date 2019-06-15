@@ -1,4 +1,6 @@
 from pyo import *
+import os
+import time
 
 
 class PyoClient:
@@ -29,6 +31,10 @@ class PyoClient:
 
         if duplex:
             if audio_backend != "portaudio":
+                jack_status = os.system("pgrep jack")
+                if jack_status > 0:
+                    os.system("jackd -P70 -p16 -t2000 -dalsa -dhw:1 -p512 -n3 -r32000 -s &")
+                    time.sleep(2)
                 self.audio_server = Server(audio=audio_backend)
             else:
                 self.audio_server = Server()

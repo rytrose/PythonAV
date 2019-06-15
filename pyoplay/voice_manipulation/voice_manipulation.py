@@ -13,6 +13,32 @@ from communication.osc_client import OSCClient
 from pi_gpio.pi_gpio import PiGPIO, PiGPIOConfig
 from utils.stoppable_thread import StoppableThread
 
+class GPIOThread(StoppableThread):
+    def __init__(self, pi_gpio, playback):
+        self.pi_gpio = pi_gpio
+        self.playback = playback
+
+        StoppableThread.__init__(self,
+                                 setup=self.setup,
+                                 target=self.run,
+                                 teardown=self.teardown)
+
+    def run(self):
+        while not self.should_stop():
+            pot_0_val = abs(1 - self.pi_gpio.get_value("pot_0"))
+            pot_1_val = abs(1 - self.pi_gpio.get_value("pot_1"))
+
+            transpo_0 = math.floor((pot_0_val * 24) - 12)
+            transpo_1 = math.floor((pot_1_val * 24) - 12)
+
+            if abs(self.playback.signal_chain[0].transpo - transpo_0) > 0.1:
+                print("Setting voice 0 to %f" % transpo_0)
+                self.playback.signal_chain[0].setTranspo(transpo_0)
+
+            if abs(self.playback.signal_chain[1].transpo - transpo_1) > 0.1:
+                print("Setting voice 1 to %f" % transpo_1)
+                self.playback.signal_chain[1].setTranspo(transpo_1)
+
 
 class VoiceManipulation:
     def __init__(self, server_sr, length):
@@ -110,26 +136,10 @@ class VoiceManipulation:
         self.pitch_timestamps.append(self.ctr.get() / self.server_sr)
         self.pitches.append(self.pitch_detect.get())
 
-    def get_io(self):
-        while not self.gpio_listen_thread.should_stop():
-            pot_0_val = abs(1 - self.pi_gpio.get_value("pot_0"))
-            pot_1_val = abs(1 - self.pi_gpio.get_value("pot_1"))
-
-            transpo_0 = math.floor((pot_0_val * 24) - 12)
-            transpo_1 = math.floor((pot_1_val * 24) - 12)
-
-            if abs(self.playback.signal_chain[0].transpo - transpo_0) > 0.1:
-                print("Setting voice 0 to %f" % transpo_0)
-                self.playback.signal_chain[0].setTranspo(transpo_0)
-
-            if abs(self.playback.signal_chain[1].transpo - transpo_1) > 0.1:
-                print("Setting voice 1 to %f" % transpo_1)
-                self.playback.signal_chain[1].setTranspo(transpo_1)
-
     def play(self):
         # self.pitch_contour.play()
         self.playback.play()
-        self.gpio_listen_thread = StoppableThread(target=self.get_io)
+        self.gpio_listen_thread = GPIOThread(self.pi_gpio, self.playback)
         self.gpio_listen_thread.start()
 
     def stop(self):

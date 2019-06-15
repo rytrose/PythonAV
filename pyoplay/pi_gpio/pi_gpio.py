@@ -47,13 +47,14 @@ class PiGPIOConfig:
 
 
 class PiGPIO:
-    def __init__(self):
+    def __init__(self, check_rate=0.05):
         self.client_connection, self.server_connection = Pipe()
         self.configs = []
         self.button_callbacks = {}
         self.get_value_responses = []
         self.server = None
         self.started = False
+        self.check_rate = check_rate
 
     def add_gpio(self, config):
         self.configs.append(config)
@@ -68,33 +69,35 @@ class PiGPIO:
         self.started = True
         self.server = PiGPIOServer(self.server_connection, self.configs)
         self.server.start()
-        self.listen_thread = Thread(target=self.listener)
-        self.listen_thread.start()
+        # self.listen_thread = Thread(target=self.listener)
+        # self.listen_thread.start()
 
     def stop(self):
         self.server.terminate()
 
-    def listener(self):
-        while True:
-            res = self.client_connection.recv()
-            if res["type"] == "get_value":
-                self.get_value_responses.append(res)
-            elif res["type"] == "button_state_change":
-                if res["action"] == "pressed":
-                    callback = self.button_callbacks[res["pin"]]["on_pressed"]
-                else:
-                    callback = self.button_callbacks[res["pin"]]["on_released"]
+    # def listener(self):
+    #     while True:
+    #         if self.client_connection.poll(self.check_rate):
+    #             res = self.client_connection.recv()
+    #             if res["type"] == "get_value":
+    #                 self.get_value_responses.append(res)
+    #             elif res["type"] == "button_state_change":
+    #                 if res["action"] == "pressed":
+    #                     callback = self.button_callbacks[res["pin"]]["on_pressed"]
+    #                 else:
+    #                     callback = self.button_callbacks[res["pin"]]["on_released"]
 
-                if callback is not None:
-                    callback()
+    #                 if callback is not None:
+    #                     callback()
 
     def get_value(self, key):
         if not self.started:
             raise Exception("You must run start() before getting or setting GPIO devices.")
         self.client_connection.send(GetValue(key))
-        while len(self.get_value_responses) < 1:
-            pass
-        res = self.get_value_responses.pop(0)
+        res = self.client_connection.recv()
+        # while len(self.get_value_responses) < 1:
+        #     pass
+        # res = self.get_value_responses.pop(0)
         return res["value"]
 
     def set_value(self, key, value):
