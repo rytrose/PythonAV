@@ -5,6 +5,7 @@ import time
 import math
 from pyo import *
 import matplotlib.pyplot as plt
+from scipy.interpolate import UnivariateSpline
 
 from pyo_extensions.audio_recorder import AudioRecorder
 from pyo_extensions.pyo_client import PyoClient
@@ -46,18 +47,23 @@ class VoiceManipulation:
         self.input = Input()
         self.minfreq = 50
         self.pitch_detect = Yin(self.input, minfreq=self.minfreq, maxfreq=600)
+        self.follower = Follower(self.input)
         self.length = length
         self.pitch_detect_pattern = Pattern(self.get_pitch, time=0.05)
         self.recorder = AudioRecorder(
             self.input, self.length, on_stop=self.stop_receiving_attacks, pattern=self.pitch_detect_pattern)
 
-        # self.attack_detector = AttackDetector(self.input)
+        self.attack_detector = AttackDetector(self.input)
         self.receive_attacks = False
-        # self.attack_func = TrigFunc(self.attack_detector, self.receive_attack)
+        self.attack_func = TrigFunc(self.attack_detector, self.receive_attack)
 
         self.ctr_trig = Trig()
         self.ctr = Count(self.ctr_trig)
 
+        self.pitch_tolerance = 30
+        self.length_req = 2
+        self.amp_avg_buffer = 0.5
+        self.amplitudes = []
         self.pitches = []
         self.pitch_timestamps = []
         self.attacks = []
@@ -78,11 +84,8 @@ class VoiceManipulation:
 
     def stop_receiving_attacks(self):
         self.receive_attacks = False
-
         self.processed_pitches = [0]
-        self.tolerance = 1.1
-        self.pitch_tolerance = 50
-        self.length_req = 8
+        amp_avg = sum(self.amplitudes) / len(self.amplitudes)
 
         i = 0
         pitches_dropped = 0
@@ -91,43 +94,50 @@ class VoiceManipulation:
         t = 0
         for pitch, timestamp in zip(self.pitches, self.pitch_timestamps):
             if 0 < i < len(self.pitches):
-                if pitch > self.minfreq + 40:
-                    diff = abs(self.pitches[i - 1] - pitch)
-                    if diff > self.pitch_tolerance:
-                        if current_length > self.length_req:
-                            if current_start == i:
-                                t += 1
-                            for j in range(current_start, i):
-                                self.processed_pitches.append(self.pitches[j])
-                            current_length = 1
-                            current_start = i
-                        else:
-                            if current_start == i:
-                                t += 1
-                            for j in range(current_start, i):
-                                self.processed_pitches.append(0)
-                                pitches_dropped += 1
-                            current_length = 1
-                            current_start = i
-                    else:
-                        current_length += 1
-                else:
-                    for j in range(current_start, i):
+                if pitch > self.minfreq + 40 and self.amplitudes[i] > self.amp_avg_buffer * amp_avg:  # If not silent
+                    diff = abs(self.pitches[i - 1] - pitch)  
+                    if diff > self.pitch_tolerance:  # If a big jump
                         self.processed_pitches.append(0)
                         pitches_dropped += 1
-                    current_length = 1
-                    current_start = i
+                    else:
+                        self.processed_pitches.append(pitch)
+                else:
+                    self.processed_pitches.append(0)
+                    pitches_dropped += 1
+                #         # if current_length > self.length_req:  # If num samples before jump were long enough to be a note
+                #         #     if current_start == i:
+                #         #         t += 1
+                #         #     for j in range(current_start, i):  # Consider the previous pitches accurate
+                #         #         self.processed_pitches.append(self.pitches[j])
+                #         #     current_length = 1
+                #         #     current_start = i
+                #         # else:  # Samples before jump were too few
+                #         #     if current_start == i:
+                #         #         t += 1
+                #         #     for j in range(current_start, i):  # Consider previous pitches as errors
+                #         #         self.processed_pitches.append(0)
+                #         #         pitches_dropped += 1
+                #         #     current_length = 1
+                #         #     current_start = i
+                #     else:
+                #         current_length += 1
+                # else:
+                #     for j in range(current_start, i):
+                #         self.processed_pitches.append(0)
+                #         pitches_dropped += 1
+                #     current_length = 1
+                #     current_start = i
             i += 1
 
-        for i in range(current_start, len(self.pitches)):
-            self.processed_pitches.append(0)
+        # for i in range(current_start, len(self.pitches)):  # Make sure last "note" is silent
+        #     self.processed_pitches.append(0)
 
         print("Dropped %d estimates." % pitches_dropped)
 
         self.pitch_timestamps[0] = 0
         self.pitch_contour = Linseg(
-            list(zip(self.pitch_timestamps, [2 * p for p in self.pitches])), loop=True)
-        self.sine = Sine(freq=self.pitch_contour).out()
+            list(zip(self.pitch_timestamps, [2 * p for p in self.processed_pitches])), loop=True)
+        self.sine = Sine(freq=self.pitch_contour, mul=0.5).out()
         self.playback = Sample(table=self.recorder.record_table, 
             processing=[(Harmonizer, {"transpo": 0}), (Harmonizer, {"transpo": 0})], loop=1)
         self.play()
@@ -135,15 +145,16 @@ class VoiceManipulation:
     def get_pitch(self):
         self.pitch_timestamps.append(self.ctr.get() / self.server_sr)
         self.pitches.append(self.pitch_detect.get())
+        self.amplitudes.append(self.follower.get())
 
     def play(self):
-        # self.pitch_contour.play()
+        self.pitch_contour.play()
         self.playback.play()
         self.gpio_listen_thread = GPIOThread(self.pi_gpio, self.playback)
         self.gpio_listen_thread.start()
 
     def stop(self):
-        # self.pitch_contour.stop()
+        self.pitch_contour.stop()
         self.playback.stop()
         self.gpio_listen_thread.stop()
 
@@ -174,11 +185,14 @@ class VoiceManipulation:
             self.playback.set_transposition(self.transposition)
 
     def plot(self):
+        spl_obj = UnivariateSpline(self.pitch_timestamps, self.processed_pitches)
+        spl = spl_obj(self.pitch_timestamps)
         plt.scatter(self.pitch_timestamps, self.pitches, s=1, color="blue")
         plt.scatter(self.pitch_timestamps,
                     self.processed_pitches, s=1, color="red")
         plt.scatter(self.attack_timestamps, self.attacks,
                     s=12, marker='^', color="green")
+        plt.plot(self.pitch_timestamps, spl, color="orange")
         plt.show()
 
 
