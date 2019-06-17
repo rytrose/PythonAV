@@ -98,7 +98,7 @@ class PiGPIO:
         while not res: 
             if len(self.get_value_responses) > 0:
                 res = self.get_value_responses.pop(0)
-            time.sleep(0.005)  # 
+            time.sleep(0.005)  # <-- breaks without this
         return res["value"]
 
     def set_value(self, key, value):
