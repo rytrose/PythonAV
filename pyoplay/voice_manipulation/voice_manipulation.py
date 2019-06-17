@@ -5,7 +5,7 @@ import time
 import math
 from pyo import *
 import matplotlib.pyplot as plt
-from scipy.interpolate import UnivariateSpline
+# from scipy.interpolate import UnivariateSpline
 
 from pyo_extensions.audio_recorder import AudioRecorder
 from pyo_extensions.pyo_client import PyoClient
@@ -184,6 +184,10 @@ class VoiceManipulation:
             self.playback.set_speed(self.speed)
             self.playback.set_transposition(self.transposition)
 
+    def attack_translation(self):
+        for attack in self.attack_timestamps:
+            pass
+
     def plot(self):
         spl_obj = UnivariateSpline(self.pitch_timestamps, self.processed_pitches)
         spl = spl_obj(self.pitch_timestamps)
@@ -192,7 +196,7 @@ class VoiceManipulation:
                     self.processed_pitches, s=1, color="red")
         plt.scatter(self.attack_timestamps, self.attacks,
                     s=12, marker='^', color="green")
-        plt.plot(self.pitch_timestamps, spl, color="orange")
+        # plt.plot(self.pitch_timestamps, spl, color="orange")
         plt.show()
 
 

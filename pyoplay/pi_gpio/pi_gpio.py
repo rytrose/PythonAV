@@ -1,5 +1,5 @@
 from multiprocessing import Process, Pipe
-from threading import Thread
+from threading import Thread, Lock
 from gpiozero import MCP3008, PWMLED, Button
 import time
 import math
@@ -48,7 +48,8 @@ class PiGPIOConfig:
 
 class PiGPIO:
     def __init__(self, check_rate=0.05):
-        self.client_connection, self.server_connection = Pipe()
+        self.client_send_connection, self.server_recv_connection = Pipe()
+        self.client_recv_connection, self.server_send_connection = Pipe()
         self.configs = []
         self.button_callbacks = {}
         self.get_value_responses = []
@@ -67,49 +68,50 @@ class PiGPIO:
 
     def start(self):
         self.started = True
-        self.server = PiGPIOServer(self.server_connection, self.configs)
+        self.server = PiGPIOServer(self.server_send_connection, self.server_recv_connection, self.configs)
         self.server.start()
-        # self.listen_thread = Thread(target=self.listener)
-        # self.listen_thread.start()
+        self.listen_thread = Thread(target=self.listener)
+        self.listen_thread.start()
 
     def stop(self):
         self.server.terminate()
 
-    # def listener(self):
-    #     while True:
-    #         if self.client_connection.poll(self.check_rate):
-    #             res = self.client_connection.recv()
-    #             if res["type"] == "get_value":
-    #                 self.get_value_responses.append(res)
-    #             elif res["type"] == "button_state_change":
-    #                 if res["action"] == "pressed":
-    #                     callback = self.button_callbacks[res["pin"]]["on_pressed"]
-    #                 else:
-    #                     callback = self.button_callbacks[res["pin"]]["on_released"]
+    def listener(self):
+        while True:
+            res = self.client_recv_connection.recv()
+            if res["type"] == "get_value":
+                self.get_value_responses.append(res)
+            elif res["type"] == "button_state_change":
+                if res["action"] == "pressed":
+                    callback = self.button_callbacks[res["pin"]]["on_pressed"]
+                else:
+                    callback = self.button_callbacks[res["pin"]]["on_released"]
 
-    #                 if callback is not None:
-    #                     callback()
+                if callback is not None:
+                    callback()
 
     def get_value(self, key):
         if not self.started:
             raise Exception("You must run start() before getting or setting GPIO devices.")
-        self.client_connection.send(GetValue(key))
-        res = self.client_connection.recv()
-        # while len(self.get_value_responses) < 1:
-        #     pass
-        # res = self.get_value_responses.pop(0)
+        self.client_send_connection.send(GetValue(key))
+        res = None
+        while not res: 
+            if len(self.get_value_responses) > 0:
+                res = self.get_value_responses.pop(0)
+            time.sleep(0.005)  # 
         return res["value"]
 
     def set_value(self, key, value):
         if not self.started:
             raise Exception("You must run start() before getting or setting GPIO devices.")
-        self.client_connection.send(SetValue(key, value))
+        self.client_send_connection.send(SetValue(key, value))
 
 
 class PiGPIOServer(Process):
-    def __init__(self, connection, configs, check_rate=0.05):
+    def __init__(self, send_connection, recv_connection, configs, check_rate=0.05):
         super(PiGPIOServer, self).__init__()
-        self._c = connection
+        self._send = send_connection
+        self._recv = recv_connection
         self.check_rate = check_rate
         self.io_map = {}
 
@@ -125,10 +127,10 @@ class PiGPIOServer(Process):
 
     def run(self):
         while True:
-            if self._c.poll(self.check_rate):
-                req = self._c.recv()
+            if self._recv.poll(self.check_rate):
+                req = self._recv.recv()
                 if isinstance(req, GetValue):
-                    self._c.send({
+                    self._send.send({
                         "type": "get_value",
                         "value": self.io_map[req.key].value
                     })
@@ -138,14 +140,14 @@ class PiGPIOServer(Process):
                     print("Don't understand type:", type(req))
 
     def on_pressed(self, button):
-        self._c.send({
+        self._send.send({
             "type": "button_state_change",
             "action": "pressed",
             "pin": button.pin
         })
 
     def on_released(self, button):
-        self._c.send({
+        self._send.send({
             "type": "button_state_change",
             "action": "released",
             "pin": button.pin
