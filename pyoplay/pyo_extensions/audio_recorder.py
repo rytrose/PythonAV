@@ -2,7 +2,7 @@ from pyo import *
 
 
 class AudioRecorder:
-    def __init__(self, input_object, length, processing=None, on_stop=None, pattern=None):
+    def __init__(self, input_object, length=4.0, processing=None, on_stop=None, pattern=None):
         """Wraps the recording of an input stream.
 
         Args:
@@ -19,6 +19,7 @@ class AudioRecorder:
         self.pattern = pattern
         self.recording_object = None
         self.stopper = None
+        self.max_length = 15
 
     def set_length(self, new_length):
         self.record_table.setSize(new_length)
@@ -35,7 +36,16 @@ class AudioRecorder:
         if self.on_stop:
             self.on_stop()
 
-    def record(self, processing=None):
+    def record(self, processing=None, length=None):
+        if length:
+            if length <= self.max_length:
+                self.record_table = NewTable(length)
+            else:
+                print(f"Truncating length to maximum of {self.max_length} seconds.")
+                self.record_table = NewTable(self.max_length)
+        else:
+            self.record_table.reset()
+    
         if processing:
             self.recording_object = TableRec(
                 processing(self.input), self.record_table).play()
@@ -51,3 +61,7 @@ class AudioRecorder:
 
         self.stopper = TrigFunc(
             self.recording_object['trig'], self.on_recording_end)
+
+    def stop(self):
+        self.recording_object.stop()
+        self.on_recording_end()
