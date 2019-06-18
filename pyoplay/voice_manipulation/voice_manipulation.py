@@ -74,6 +74,10 @@ class VoiceManipulation:
         self.pi_gpio = PiGPIO()
         self.pi_gpio.add_gpio(PiGPIOConfig("pot_0", "analog", channel=0))
         self.pi_gpio.add_gpio(PiGPIOConfig("pot_1", "analog", channel=1))
+        self.pi_gpio.add_gpio(PiGPIOConfig("led_0", "led", pin=3))
+        self.pi_gpio.add_gpio(PiGPIOConfig("button_0", "button", pin=2,
+            on_pressed=lambda: self.pi_gpio.set_value("led_0", 1), 
+            on_released=lambda: self.pi_gpio.set_value("led_0", 0)))
         self.pi_gpio.start()
 
 

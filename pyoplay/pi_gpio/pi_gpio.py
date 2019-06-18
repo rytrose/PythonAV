@@ -1,6 +1,6 @@
 from multiprocessing import Process, Pipe
 from threading import Thread, Lock
-from gpiozero import MCP3008, PWMLED, Button
+from gpiozero import MCP3008, PWMLED, LED, Button
 import time
 import math
 
@@ -121,7 +121,7 @@ class PiGPIOServer(Process):
                 self.io_map[config.key].when_pressed = self.on_pressed
                 self.io_map[config.key].when_released = self.on_released
             elif config.input_type == "led":
-                self.io_map[config.key] = PWMLED(config.pin)
+                self.io_map[config.key] = LED(config.pin)
             elif config.input_type == "analog":
                 self.io_map[config.key] = MCP3008(channel=config.channel)
 
@@ -135,7 +135,10 @@ class PiGPIOServer(Process):
                         "value": self.io_map[req.key].value
                     })
                 elif isinstance(req, SetValue):
-                    self.io_map[req.key].value = req.value
+                    if req.value > 0:
+                        self.io_map[req.key].on()
+                    else:
+                        self.io_map[req.key].off()
                 else:
                     print("Don't understand type:", type(req))
 
@@ -143,12 +146,12 @@ class PiGPIOServer(Process):
         self._send.send({
             "type": "button_state_change",
             "action": "pressed",
-            "pin": button.pin
+            "pin": button.pin.number
         })
 
     def on_released(self, button):
         self._send.send({
             "type": "button_state_change",
             "action": "released",
-            "pin": button.pin
+            "pin": button.pin.number
         })
