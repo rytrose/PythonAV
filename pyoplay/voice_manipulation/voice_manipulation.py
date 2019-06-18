@@ -13,6 +13,7 @@ from pyo_extensions.sample import Sample
 from communication.osc_client import OSCClient
 from pi_gpio.pi_gpio import PiGPIO, PiGPIOConfig
 from utils.stoppable_thread import StoppableThread
+from utils.utils import quantize
 
 class GPIOThread(StoppableThread):
     def __init__(self, pi_gpio, playback):
@@ -68,6 +69,7 @@ class VoiceManipulation:
         self.pitch_timestamps = []
         self.attacks = []
         self.attack_timestamps = []
+        self.sound_objects = []
         self.pitch_contour = None
         self.playback = None
 
@@ -79,7 +81,6 @@ class VoiceManipulation:
             on_pressed=lambda: self.pi_gpio.set_value("led_0", 1), 
             on_released=lambda: self.pi_gpio.set_value("led_0", 0)))
         self.pi_gpio.start()
-
 
     def receive_attack(self):
         if self.receive_attacks:
@@ -108,39 +109,14 @@ class VoiceManipulation:
                 else:
                     self.processed_pitches.append(0)
                     pitches_dropped += 1
-                #         # if current_length > self.length_req:  # If num samples before jump were long enough to be a note
-                #         #     if current_start == i:
-                #         #         t += 1
-                #         #     for j in range(current_start, i):  # Consider the previous pitches accurate
-                #         #         self.processed_pitches.append(self.pitches[j])
-                #         #     current_length = 1
-                #         #     current_start = i
-                #         # else:  # Samples before jump were too few
-                #         #     if current_start == i:
-                #         #         t += 1
-                #         #     for j in range(current_start, i):  # Consider previous pitches as errors
-                #         #         self.processed_pitches.append(0)
-                #         #         pitches_dropped += 1
-                #         #     current_length = 1
-                #         #     current_start = i
-                #     else:
-                #         current_length += 1
-                # else:
-                #     for j in range(current_start, i):
-                #         self.processed_pitches.append(0)
-                #         pitches_dropped += 1
-                #     current_length = 1
-                #     current_start = i
             i += 1
 
-        # for i in range(current_start, len(self.pitches)):  # Make sure last "note" is silent
-        #     self.processed_pitches.append(0)
-
+        self.processed_pitches = [2 * p for p in self.processed_pitches]
         print("Dropped %d estimates." % pitches_dropped)
 
+        self.attack_translation()
         self.pitch_timestamps[0] = 0
-        self.pitch_contour = Linseg(
-            list(zip(self.pitch_timestamps, [2 * p for p in self.processed_pitches])), loop=True)
+        self.pitch_contour = Linseg(list(zip(self.pitch_timestamps, self.processed_pitches)), loop=True)
         self.sine = Sine(freq=self.pitch_contour, mul=0.5).out()
         self.playback = Sample(table=self.recorder.record_table, 
             processing=[(Harmonizer, {"transpo": 0}), (Harmonizer, {"transpo": 0})], loop=1)
@@ -189,17 +165,35 @@ class VoiceManipulation:
             self.playback.set_transposition(self.transposition)
 
     def attack_translation(self):
+        self.sound_objects = []
         for attack in self.attack_timestamps:
-            pass
+            closest_timestamp = quantize(attack, self.pitch_timestamps)
+            closest_timestamp_index = self.pitch_timestamps.index(closest_timestamp)
+            i = closest_timestamp_index
+            sound_object = []
+
+            while i < len(self.pitch_timestamps) - 1:
+                diff = abs(self.processed_pitches[i + 1] - self.processed_pitches[i])  
+                if diff > self.pitch_tolerance or self.processed_pitches[i + 1] == 0:  # If a big jump
+                    break
+                else:
+                    sound_object.append((self.pitch_timestamps[i], self.processed_pitches[i]))
+                i += 1
+
+            if sound_object and len(sound_object) > 4:
+                self.sound_objects.append(sound_object)
 
     def plot(self):
-        spl_obj = UnivariateSpline(self.pitch_timestamps, self.processed_pitches)
-        spl = spl_obj(self.pitch_timestamps)
+        # spl_obj = UnivariateSpline(self.pitch_timestamps, self.processed_pitches)
+        # spl = spl_obj(self.pitch_timestamps)
         plt.scatter(self.pitch_timestamps, self.pitches, s=1, color="blue")
         plt.scatter(self.pitch_timestamps,
                     self.processed_pitches, s=1, color="red")
         plt.scatter(self.attack_timestamps, self.attacks,
                     s=12, marker='^', color="green")
+        for so in self.sound_objects:
+            plt.scatter([s[0] for s in so], [s[1] for s in so], 
+            s=1, marker='X', color="orange")
         # plt.plot(self.pitch_timestamps, spl, color="orange")
         plt.show()
 
