@@ -6,6 +6,7 @@ import math
 from pyo import *
 import matplotlib.pyplot as plt
 import threading
+import atexit
 # from scipy.interpolate import UnivariateSpline
 
 from pyo_extensions.audio_recorder import AudioRecorder
@@ -217,6 +218,9 @@ class VoiceManipulation:
 if __name__ == "__main__":
     c = PyoClient(audio_backend="jack", default_audio_device="built-in")
     v = VoiceManipulation(c.audio_server.getSamplingRate(), 4.0)
+    
+    def shutdown():
+        c.audio_server.stop()
 
     # def on_record(addess, args):
     #     print("Recording...")
