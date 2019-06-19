@@ -2,7 +2,7 @@ from pyo import *
 
 
 class AudioRecorder:
-    def __init__(self, input_object, length=4.0, processing=None, on_stop=None, pattern=None):
+    def __init__(self, input_object, sr, length=4, processing=None, on_stop=None, pattern=None):
         """Wraps the recording of an input stream.
 
         Args:
@@ -12,9 +12,12 @@ class AudioRecorder:
             on_stop:
         """
         self.input = input_object
+        self.sr = sr
         self.length = length
         self.processing = processing
         self.on_stop = on_stop
+        self.ctr_trig = Trig()
+        self.ctr = Count(self.ctr_trig)
         self.record_table = NewTable(self.length)
         self.pattern = pattern
         self.recording_object = None
@@ -59,9 +62,15 @@ class AudioRecorder:
         if self.pattern:
             self.pattern.play()
 
+        self.ctr_trig.play()
+
         self.stopper = TrigFunc(
             self.recording_object['trig'], self.on_recording_end)
 
     def stop(self):
         self.recording_object.stop()
+        num_samples_recorded = self.ctr.get()
+        trimmed_table = NewTable(num_samples_recorded / self.sr)
+        trimmed_table.copyData(self.record_table)
+        self.record_table = trimmed_table
         self.on_recording_end()

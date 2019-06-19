@@ -5,6 +5,7 @@ import time
 import math
 from pyo import *
 import matplotlib.pyplot as plt
+import threading
 # from scipy.interpolate import UnivariateSpline
 
 from pyo_extensions.audio_recorder import AudioRecorder
@@ -20,12 +21,9 @@ class GPIOThread(StoppableThread):
         self.pi_gpio = pi_gpio
         self.playback = playback
 
-        StoppableThread.__init__(self,
-                                 setup=self.setup,
-                                 target=self.run,
-                                 teardown=self.teardown)
+        StoppableThread.__init__(self, target=self.listen)
 
-    def run(self):
+    def listen(self):
         while not self.should_stop():
             pot_0_val = abs(1 - self.pi_gpio.get_value("pot_0"))
             pot_1_val = abs(1 - self.pi_gpio.get_value("pot_1"))
@@ -52,7 +50,8 @@ class VoiceManipulation:
         self.length = length
         self.pitch_detect_pattern = Pattern(self.get_pitch, time=0.05)
         self.recorder = AudioRecorder(
-            self.input, self.length, on_stop=self.stop_receiving_attacks, pattern=self.pitch_detect_pattern)
+            self.input, self.server_sr, self.length, 
+            on_stop=self.stop_receiving_attacks, pattern=self.pitch_detect_pattern)
 
         self.attack_detector = AttackDetector(self.input)
         self.receive_attacks = False
@@ -72,15 +71,24 @@ class VoiceManipulation:
         self.sound_objects = []
         self.pitch_contour = None
         self.playback = None
+        self.playing = False
 
         self.pi_gpio = PiGPIO()
         self.pi_gpio.add_gpio(PiGPIOConfig("pot_0", "analog", channel=0))
         self.pi_gpio.add_gpio(PiGPIOConfig("pot_1", "analog", channel=1))
         self.pi_gpio.add_gpio(PiGPIOConfig("led_0", "led", pin=3))
         self.pi_gpio.add_gpio(PiGPIOConfig("button_0", "button", pin=2,
-            on_pressed=lambda: self.pi_gpio.set_value("led_0", 1), 
-            on_released=lambda: self.pi_gpio.set_value("led_0", 0)))
+            on_pressed=self.button_0_pressed, 
+            on_released=self.button_0_released))
         self.pi_gpio.start()
+
+    def button_0_pressed(self):
+        self.pi_gpio.set_value("led_0", 1)
+        self.record(length=10)
+
+    def button_0_released(self):
+        self.pi_gpio.set_value("led_0", 0)
+        self.recorder.stop()
 
     def receive_attack(self):
         if self.receive_attacks:
@@ -128,17 +136,21 @@ class VoiceManipulation:
         self.amplitudes.append(self.follower.get())
 
     def play(self):
+        self.playing = True
         self.pitch_contour.play()
         self.playback.play()
         self.gpio_listen_thread = GPIOThread(self.pi_gpio, self.playback)
         self.gpio_listen_thread.start()
 
     def stop(self):
+        self.playing = False
         self.pitch_contour.stop()
         self.playback.stop()
-        self.gpio_listen_thread.stop()
+        self.gpio_listen_thread.stop(wait=False)
 
-    def record(self):
+    def record(self, length=None):
+        if self.playing:
+            self.stop()
         self.speed = 1 / self.recorder.length
         self.transposition = 1
         self.pitches = []
@@ -147,7 +159,11 @@ class VoiceManipulation:
         self.attack_timestamps = []
         self.receive_attacks = True
         self.ctr_trig.play()
-        self.recorder.record()
+        if length:
+            self.recorder.record(length=length)
+        else:
+            self.recorder.record()
+
 
     def change_pitch_contour(self, speed=None, transposition=None):
         if self.playback:
