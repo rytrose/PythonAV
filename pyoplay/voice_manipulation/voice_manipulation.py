@@ -53,7 +53,7 @@ class VoiceManipulation:
         self.pitch_detect = Yin(self.input, minfreq=self.minfreq, maxfreq=600)
         self.follower = Follower(self.input)
         self.length = length
-        self.pitch_detect_pattern = Pattern(self.get_pitch, time=0.05)
+        self.pitch_detect_pattern = Pattern(self.get_pitch, time=0.02)
         self.recorder = AudioRecorder(
             self.input, self.server_sr, self.length, 
             on_stop=self.stop_receiving_attacks, pattern=self.pitch_detect_pattern)
@@ -66,6 +66,7 @@ class VoiceManipulation:
         self.ctr = Count(self.ctr_trig)
 
         self.pitch_tolerance = 30
+        self.sound_object_tolerance = 50
         self.length_req = 2
         self.amp_avg_buffer = 0.5
         self.amplitudes = []
@@ -195,40 +196,65 @@ class VoiceManipulation:
         for attack in self.attack_timestamps:
             closest_timestamp = quantize(attack, self.pitch_timestamps)
             closest_timestamp_index = self.pitch_timestamps.index(closest_timestamp)
+
+            print(
+                f"Closest: ({self.pitch_timestamps[closest_timestamp_index]}, {self.processed_pitches[closest_timestamp_index]})")
+            print(f"Next four:")
+
+            for x in range(closest_timestamp_index + 1, closest_timestamp_index + 5):
+                print(f"\t{self.processed_pitches[x]}")
+
+            for _ in range(5):
+                if self.processed_pitches[closest_timestamp_index] == 0:
+                    closest_timestamp_index += 1
+                else:
+                    break
+
             i = closest_timestamp_index
             sound_object = []
 
             while i < len(self.pitch_timestamps) - 1:
                 diff = abs(self.processed_pitches[i + 1] - self.processed_pitches[i])  
-                if diff > self.pitch_tolerance or self.processed_pitches[i + 1] == 0:  # If a big jump
+                if diff > self.sound_object_tolerance or self.processed_pitches[i + 1] == 0:  # If a big jump
                     break
                 else:
                     sound_object.append((self.pitch_timestamps[i], self.processed_pitches[i]))
                 i += 1
 
-            if sound_object and len(sound_object) > 4:
+            if sound_object and len(sound_object) > 2:
                 self.sound_objects.append(sound_object)
+        self.plot()
+
+        self.segment = [(0, 0)]
+        for so in self.sound_objects:
+            self.segment += ([(so[0][0], 0)] + so + [(so[-1][0], 0)])
+        self.segment += [(self.recorder.record_table.getSize() / self.server_sr, 0)]
+        self.ls = Linseg(self.segment, loop=True)
+        self.saw = SuperSaw(freq=self.ls).out()
+        self.ls.play()
+
 
     def plot(self):
         # spl_obj = UnivariateSpline(self.pitch_timestamps, self.processed_pitches)
         # spl = spl_obj(self.pitch_timestamps)
-        plt.scatter(self.pitch_timestamps, self.pitches, s=1, color="blue")
+        # plt.scatter(self.pitch_timestamps, self.pitches, s=1, color="blue")
         plt.scatter(self.pitch_timestamps,
-                    self.processed_pitches, s=1, color="red")
+                    self.processed_pitches, s=1, color="blue")
         plt.scatter(self.attack_timestamps, self.attacks,
                     s=12, marker='^', color="green")
         for so in self.sound_objects:
             plt.scatter([s[0] for s in so], [s[1] for s in so], 
-            s=1, marker='X', color="orange")
+            s=8, marker='X', color="orange")
         # plt.plot(self.pitch_timestamps, spl, color="orange")
-        plt.show()
+        # plt.show()
+        plt.savefig('plt.pdf')
 
 
 if __name__ == "__main__":
     if ON_PI:
-        c = PyoClient(audio_backend="jack", default_audio_device="built-in")
+        c = PyoClient(audio_backend="jack", default_audio_device="usb")
     else:
-        c = PyoClient(default_audio_device="built-in")
+        c = PyoClient(default_audio_device="usb")
     v = VoiceManipulation(c.audio_server.getSamplingRate(), 4.0)
     
     def shutdown():
