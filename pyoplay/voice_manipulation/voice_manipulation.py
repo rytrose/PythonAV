@@ -13,7 +13,11 @@ from pyo_extensions.audio_recorder import AudioRecorder
 from pyo_extensions.pyo_client import PyoClient
 from pyo_extensions.sample import Sample
 from communication.osc_client import OSCClient
-from pi_gpio.pi_gpio import PiGPIO, PiGPIOConfig
+
+ON_PI = False
+
+if ON_PI:
+    from pi_gpio.pi_gpio import PiGPIO, PiGPIOConfig
 from utils.stoppable_thread import StoppableThread
 from utils.utils import quantize
 
@@ -74,14 +78,15 @@ class VoiceManipulation:
         self.playback = None
         self.playing = False
 
-        self.pi_gpio = PiGPIO()
-        self.pi_gpio.add_gpio(PiGPIOConfig("pot_0", "analog", channel=0))
-        self.pi_gpio.add_gpio(PiGPIOConfig("pot_1", "analog", channel=1))
-        self.pi_gpio.add_gpio(PiGPIOConfig("led_0", "led", pin=3))
-        self.pi_gpio.add_gpio(PiGPIOConfig("button_0", "button", pin=2,
-            on_pressed=self.button_0_pressed, 
-            on_released=self.button_0_released))
-        self.pi_gpio.start()
+        if ON_PI:
+            self.pi_gpio = PiGPIO()
+            self.pi_gpio.add_gpio(PiGPIOConfig("pot_0", "analog", channel=0))
+            self.pi_gpio.add_gpio(PiGPIOConfig("pot_1", "analog", channel=1))
+            self.pi_gpio.add_gpio(PiGPIOConfig("led_0", "led", pin=3))
+            self.pi_gpio.add_gpio(PiGPIOConfig("button_0", "button", pin=2,
+                on_pressed=self.button_0_pressed, 
+                on_released=self.button_0_released))
+            self.pi_gpio.start()
 
     def button_0_pressed(self):
         self.pi_gpio.set_value("led_0", 1)
@@ -140,14 +145,18 @@ class VoiceManipulation:
         self.playing = True
         self.pitch_contour.play()
         self.playback.play()
-        self.gpio_listen_thread = GPIOThread(self.pi_gpio, self.playback)
-        self.gpio_listen_thread.start()
+
+        if ON_PI:
+            self.gpio_listen_thread = GPIOThread(self.pi_gpio, self.playback)
+            self.gpio_listen_thread.start()
 
     def stop(self):
         self.playing = False
         self.pitch_contour.stop()
         self.playback.stop()
-        self.gpio_listen_thread.stop(wait=False)
+
+        if ON_PI:
+            self.gpio_listen_thread.stop(wait=False)
 
     def record(self, length=None):
         if self.playing:
@@ -216,7 +225,10 @@ class VoiceManipulation:
 
 
 if __name__ == "__main__":
-    c = PyoClient(audio_backend="jack", default_audio_device="built-in")
+    if ON_PI:
+        c = PyoClient(audio_backend="jack", default_audio_device="built-in")
+    else:
+        c = PyoClient(default_audio_device="built-in")
     v = VoiceManipulation(c.audio_server.getSamplingRate(), 4.0)
     
     def shutdown():
