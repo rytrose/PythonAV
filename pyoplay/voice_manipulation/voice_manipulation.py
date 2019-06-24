@@ -14,7 +14,7 @@ from pyo_extensions.pyo_client import PyoClient
 from pyo_extensions.sample import Sample
 from communication.osc_client import OSCClient
 
-ON_PI = False
+ON_PI = True
 
 if ON_PI:
     from pi_gpio.pi_gpio import PiGPIO, PiGPIOConfig
@@ -133,9 +133,8 @@ class VoiceManipulation:
 
         self.attack_translation()
         self.pitch_timestamps[0] = 0
-        self.pitch_contour = Linseg(
-            list(zip(self.pitch_timestamps, self.processed_pitches)), loop=True)
-        self.sine = Sine(freq=self.pitch_contour, mul=0.5).out()
+        # self.pitch_contour = Linseg(list(zip(self.pitch_timestamps, self.processed_pitches)), loop=True)
+        # self.sine = Sine(freq=self.pitch_contour, mul=0.5).out()
         self.playback = Sample(table=self.recorder.record_table,
                                processing=[(Harmonizer, {"transpo": 0}), (Harmonizer, {"transpo": 0})], loop=1)
         self.play()
@@ -147,7 +146,7 @@ class VoiceManipulation:
 
     def play(self):
         self.playing = True
-        self.pitch_contour.play()
+        # self.pitch_contour.play()
         self.playback.play()
 
         if ON_PI:
@@ -156,7 +155,7 @@ class VoiceManipulation:
 
     def stop(self):
         self.playing = False
-        self.pitch_contour.stop()
+        # self.pitch_contour.stop()
         self.playback.stop()
 
         if ON_PI:
@@ -208,7 +207,8 @@ class VoiceManipulation:
                 print("\t{}".format(self.processed_pitches[x]))
 
             for _ in range(5):
-                if self.processed_pitches[closest_timestamp_index] == 0:
+                if closest_timestamp_index < len(self.processed_pitches) \
+                        and self.processed_pitches[closest_timestamp_index] == 0:
                     closest_timestamp_index += 1
                 else:
                     break
@@ -229,7 +229,6 @@ class VoiceManipulation:
 
             if sound_object and len(sound_object) > 2:
                 self.sound_objects.append(sound_object)
-        self.plot()
 
         self.segment = [(0, 0)]
         for so in self.sound_objects:
