@@ -44,7 +44,8 @@ class AudioRecorder:
             if length <= self.max_length:
                 self.record_table = NewTable(length)
             else:
-                print(f"Truncating length to maximum of {self.max_length} seconds.")
+                print("Truncating length to maximum of {} seconds.".format(
+                    self.max_length))
                 self.record_table = NewTable(self.max_length)
         else:
             self.record_table.reset()

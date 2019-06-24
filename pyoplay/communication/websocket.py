@@ -21,7 +21,7 @@ class WS:
         self._send_queue = asyncio.Queue()
 
     async def print_message(self, address, args):
-        print(f"Received message to address '{address}' with args {args}")
+        print("Received message to address '{}' with args {}".format(address, args))
 
     async def producer(self):
         message_dict = await self._send_queue.get()
