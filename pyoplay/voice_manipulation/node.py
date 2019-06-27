@@ -7,6 +7,7 @@ from pyo import *
 import matplotlib.pyplot as plt
 import threading
 import atexit
+import pickle
 # from scipy.interpolate import UnivariateSpline
 
 from pyo_extensions.audio_recorder import AudioRecorder
@@ -32,18 +33,10 @@ class GPIOThread(StoppableThread):
     def listen(self):
         while not self.should_stop():
             pot_0_val = abs(1 - self.pi_gpio.get_value("pot_0"))
-            pot_1_val = abs(1 - self.pi_gpio.get_value("pot_1"))
-
             transpo_0 = math.floor((pot_0_val * 24) - 12)
-            transpo_1 = math.floor((pot_1_val * 24) - 12)
-
             if abs(self.playback.signal_chain[0].transpo - transpo_0) > 0.1:
                 print("Setting voice 0 to %f" % transpo_0)
                 self.playback.signal_chain[0].setTranspo(transpo_0)
-
-            if abs(self.playback.signal_chain[1].transpo - transpo_1) > 0.1:
-                print("Setting voice 1 to %f" % transpo_1)
-                self.playback.signal_chain[1].setTranspo(transpo_1)
 
 
 class VoiceManipulation:
@@ -80,10 +73,11 @@ class VoiceManipulation:
         self.playback = None
         self.playing = False
 
+        self.setup_osc()
+
         if ON_PI:
             self.pi_gpio = PiGPIO()
             self.pi_gpio.add_gpio(PiGPIOConfig("pot_0", "analog", channel=0))
-            self.pi_gpio.add_gpio(PiGPIOConfig("pot_1", "analog", channel=1))
             self.pi_gpio.add_gpio(PiGPIOConfig("led_0", "led", pin=3))
             self.pi_gpio.add_gpio(PiGPIOConfig("button_0", "button", pin=2,
                                                on_pressed=self.button_0_pressed,
@@ -97,6 +91,15 @@ class VoiceManipulation:
     def button_0_released(self):
         self.pi_gpio.set_value("led_0", 0)
         self.recorder.stop()
+
+    def setup_osc(self):
+        self.osc_client = OSCClient(local_address="rytrose-pi-zero-w.local", 
+                                    remote_address="Ryans-MacBook-Pro.local")
+        self.osc_client.map("/segment", self.on_segment)
+        self.osc_client.begin()
+
+    def on_segment(self, address, args):
+        print(args)
 
     def receive_attack(self):
         if self.receive_attacks:
@@ -136,7 +139,7 @@ class VoiceManipulation:
         # self.pitch_contour = Linseg(list(zip(self.pitch_timestamps, self.processed_pitches)), loop=True)
         # self.sine = Sine(freq=self.pitch_contour, mul=0.5).out()
         self.playback = Sample(table=self.recorder.record_table,
-                               processing=[(Harmonizer, {"transpo": 0}), (Harmonizer, {"transpo": 0})], loop=1)
+                               processing=[(Harmonizer, {"transpo": 0})], loop=1)
         self.play()
 
     def get_pitch(self):
@@ -203,7 +206,7 @@ class VoiceManipulation:
                 self.pitch_timestamps[closest_timestamp_index], self.processed_pitches[closest_timestamp_index]))
             print("Next four:")
 
-            for x in range(closest_timestamp_index + 1, closest_timestamp_index + 5):
+            for x in range(closest_timestamp_index + 1, min(len(self.pitch_timestamps), closest_timestamp_index + 5)):
                 print("\t{}".format(self.processed_pitches[x]))
 
             for _ in range(5):
@@ -235,9 +238,14 @@ class VoiceManipulation:
             self.segment += ([(so[0][0], 0)] + so + [(so[-1][0], 0)])
         self.segment += [(self.recorder.record_table.getSize() /
                           self.server_sr, 0)]
-        self.ls = Linseg(self.segment, loop=True)
-        self.saw = SuperSaw(freq=self.ls).out()
-        self.ls.play()
+        self.send_to_server(self.segment)
+        # self.ls = Linseg(self.segment, loop=True)
+        # self.saw = SuperSaw(freq=self.ls).out()
+        # self.ls.play()
+
+    def send_to_server(self, segment):
+        segment_bytes = pickle.dumps(segment)
+        self.osc_client.send("/segment", segment_bytes)
 
     def plot(self):
         # spl_obj = UnivariateSpline(self.pitch_timestamps, self.processed_pitches)
