@@ -98,8 +98,9 @@ class VoiceManipulation:
         self.osc_client.map("/segment", self.on_segment)
         self.osc_client.begin()
 
-    def on_segment(self, address, args):
-        print(args)
+    def on_segment(self, address, segment_bytes):
+        segment = pickle.loads(segment_bytes)
+        print("Node got segment:", segment)
 
     def receive_attack(self):
         if self.receive_attacks:
