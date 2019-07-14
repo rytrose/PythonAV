@@ -137,8 +137,6 @@ class VoiceManipulation:
 
         self.attack_translation()
         self.pitch_timestamps[0] = 0
-        # self.pitch_contour = Linseg(list(zip(self.pitch_timestamps, self.processed_pitches)), loop=True)
-        # self.sine = Sine(freq=self.pitch_contour, mul=0.5).out()
         self.playback = Sample(table=self.recorder.record_table,
                                processing=[(Harmonizer, {"transpo": 0})], parallel_processing=False, play_original=False, loop=1)
         self.play()
@@ -150,7 +148,6 @@ class VoiceManipulation:
 
     def play(self):
         self.playing = True
-        # self.pitch_contour.play()
         self.playback.play()
 
         if ON_PI:
@@ -240,18 +237,12 @@ class VoiceManipulation:
         self.segment += [(self.recorder.record_table.getSize() /
                           self.server_sr, 0)]
         self.send_to_server(self.segment)
-        # self.ls = Linseg(self.segment, loop=True)
-        # self.saw = SuperSaw(freq=self.ls).out()
-        # self.ls.play()
 
     def send_to_server(self, segment):
         segment_bytes = pickle.dumps(segment)
         self.osc_client.send("/segment", segment_bytes)
 
     def plot(self):
-        # spl_obj = UnivariateSpline(self.pitch_timestamps, self.processed_pitches)
-        # spl = spl_obj(self.pitch_timestamps)
-        # plt.scatter(self.pitch_timestamps, self.pitches, s=1, color="blue")
         plt.scatter(self.pitch_timestamps,
                     self.processed_pitches, s=1, color="blue")
         plt.scatter(self.attack_timestamps, self.attacks,
@@ -259,8 +250,6 @@ class VoiceManipulation:
         for so in self.sound_objects:
             plt.scatter([s[0] for s in so], [s[1] for s in so],
                         s=8, marker='X', color="orange")
-        # plt.plot(self.pitch_timestamps, spl, color="orange")
-        # plt.show()
         plt.savefig('plt.pdf')
 
 
@@ -273,27 +262,3 @@ if __name__ == "__main__":
 
     def shutdown():
         c.audio_server.stop()
-
-    # def on_record(addess, args):
-    #     print("Recording...")
-    #     v.record()
-
-    # def on_set_speed(address, speed):
-    #     v.change_pitch_contour(speed=speed)
-
-    # def on_set_transposition(address, transposition):
-    #     v.change_pitch_contour(transposition=transposition)
-
-    # def on_play(addess, args):
-    #     v.play()
-
-    # def on_stop(address, args):
-    #     v.stop()
-
-    # osc_client = OSCClient()
-    # osc_client.map("/record", on_record)
-    # osc_client.map("/set_speed", on_set_speed)
-    # osc_client.map("/set_transposition", on_set_transposition)
-    # osc_client.map("/play", on_play)
-    # osc_client.map("/stop", on_stop)
-    # osc_client.begin()
