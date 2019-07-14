@@ -140,7 +140,7 @@ class VoiceManipulation:
         # self.pitch_contour = Linseg(list(zip(self.pitch_timestamps, self.processed_pitches)), loop=True)
         # self.sine = Sine(freq=self.pitch_contour, mul=0.5).out()
         self.playback = Sample(table=self.recorder.record_table,
-                               processing=[(Harmonizer, {"transpo": 0})], loop=1)
+                               processing=[(Harmonizer, {"transpo": 0})], parallel_processing=False, play_original=False, loop=1)
         self.play()
 
     def get_pitch(self):
