@@ -7,5 +7,12 @@ from voice_manipulation.capture import VoiceCapture
 from voice_manipulation.midifier import Midifier
 
 c = PyoClient(default_audio_device="built-in")
-v = VoiceCapture(c.audio_server.getSamplingRate(), 4.0)
+length = 4.0
+v = VoiceCapture(c.audio_server.getSamplingRate(), length)
 m = Midifier("IAC Driver VoiceCapture")
+
+def do():
+    while True:
+        m.send_segment(v.segment)
+
+v.record(record_callback=do)

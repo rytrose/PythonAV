@@ -52,6 +52,7 @@ class VoiceCapture:
         self.pitch_contour = None
         self.playback = None
         self.playing = False
+        self.record_callback = None
 
     def receive_attack(self):
         if self.receive_attacks:
@@ -158,8 +159,11 @@ class VoiceCapture:
                     for sample in range(start_sample, end_sample):
                         self.playback.table.put(0.0, pos=sample)
 
-        self.ls = Linseg(self.segment, loop=True)
-        self.saw = SuperSaw(freq=self.ls).mix(2).out()
+        # self.ls = Linseg(self.segment, loop=True)
+        # self.saw = SuperSaw(freq=self.ls).mix(2).out()
+
+        if self.record_callback:
+            self.record_callback()
         
     def get_pitch_amplitude(self):
         """Saves a current pitch detection and amplitude value."""
@@ -170,7 +174,7 @@ class VoiceCapture:
     def play(self):
         """Plays back the recorded sample and basic synthesized sound object."""
         self.playing = True
-        self.ls.play()
+        # self.ls.play()
         self.playback.play()
 
     def stop(self):
@@ -179,20 +183,25 @@ class VoiceCapture:
         self.pitch_contour.stop()
         self.playback.stop()
 
-    def record(self, length=None):
+    def record(self, length=None, wait=False, record_callback=None):
         """Start recording and detecting pitch and attacks."""
         if self.playing:
             self.stop()
+        self.record_callback = record_callback
         self.pitches = []
         self.pitch_timestamps = []
         self.attacks = []
         self.attack_timestamps = []
         self.receive_attacks = True
         self.ctr_trig.play()
+
         if length:
             self.recorder.record(length=length)
         else:
             self.recorder.record()
+
+        if wait:
+            time.sleep(self.recorder.length)
 
     def plot(self):
         """Plot processed pitches and sound objects."""
