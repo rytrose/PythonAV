@@ -15,7 +15,7 @@ from pyo_extensions.pyo_client import PyoClient
 from pyo_extensions.sample import Sample
 from communication.osc_client import OSCClient
 
-ON_PI = True
+ON_PI = False
 
 if ON_PI:
     from pi_gpio.pi_gpio import PiGPIO, PiGPIOConfig
@@ -93,7 +93,10 @@ class VoiceManipulation:
         self.recorder.stop()
 
     def setup_osc(self):
-        self.osc_client = OSCClient(local_address="rytrose-pi-zero-w.local", 
+        local_address = "Ryans-MacBook-Pro.local"
+        if ON_PI:
+            local_address = "rytrose-pi-zero-w.local"
+        self.osc_client = OSCClient(local_address=local_address,
                                     remote_address="Ryans-MacBook-Pro.local")
         self.osc_client.map("/segment", self.on_segment)
         self.osc_client.begin()
@@ -114,12 +117,13 @@ class VoiceManipulation:
 
         i = 0
         pitches_dropped = 0
+        silence_dropped = 0
         current_length = 1
         current_start = 1
         t = 0
         for pitch, timestamp in zip(self.pitches, self.pitch_timestamps):
             if 0 < i < len(self.pitches):
-                # If not silent
+                # If not silent or super low
                 if pitch > self.minfreq + 40 and self.amplitudes[i] > self.amp_avg_buffer * amp_avg:
                     diff = abs(self.pitches[i - 1] - pitch)
                     if diff > self.pitch_tolerance:  # If a big jump
@@ -129,16 +133,31 @@ class VoiceManipulation:
                         self.processed_pitches.append(pitch)
                 else:
                     self.processed_pitches.append(0)
-                    pitches_dropped += 1
+                    silence_dropped += 1
             i += 1
 
         self.processed_pitches = [2 * p for p in self.processed_pitches]
-        print("Dropped %d estimates." % pitches_dropped)
+        print("Dropped %d estimates out of %d." % (pitches_dropped + silence_dropped, len(self.pitches)))
+        print("\t%d pitch" % pitches_dropped)
+        print("\t%d amplitude" % silence_dropped)
 
         self.attack_translation()
         self.pitch_timestamps[0] = 0
         self.playback = Sample(table=self.recorder.record_table,
                                processing=[(Harmonizer, {"transpo": 0})], parallel_processing=False, play_original=False, loop=1)
+
+        for i in range(len(self.segment)):  # apply all silence in the segement to the recording
+            if i > 0:
+                if self.segment[i - 1][1] == 0:  # if the previous segment freq is 0
+                    start_sample = math.floor(self.segment[i - 1][0] * self.playback.sr)
+                    end_sample = math.floor(self.segment[i][0] * self.playback.sr)
+                    for sample in range(start_sample, end_sample):
+                        self.playback.table.put(0.0, pos=sample)
+
+        self.ls = Linseg(self.segment, loop=True)
+        self.saw = SuperSaw(freq=self.ls).mix(2).out()
+        self.ls.play()
+
         self.play()
 
     def get_pitch(self):
@@ -156,7 +175,7 @@ class VoiceManipulation:
 
     def stop(self):
         self.playing = False
-        # self.pitch_contour.stop()
+        self.pitch_contour.stop()
         self.playback.stop()
 
         if ON_PI:
@@ -200,14 +219,7 @@ class VoiceManipulation:
             closest_timestamp_index = self.pitch_timestamps.index(
                 closest_timestamp)
 
-            print("Closest: ({}, {})".format(
-                self.pitch_timestamps[closest_timestamp_index], self.processed_pitches[closest_timestamp_index]))
-            print("Next four:")
-
-            for x in range(closest_timestamp_index + 1, min(len(self.pitch_timestamps), closest_timestamp_index + 5)):
-                print("\t{}".format(self.processed_pitches[x]))
-
-            for _ in range(5):
+            for _ in range(10):
                 if closest_timestamp_index < len(self.processed_pitches) \
                         and self.processed_pitches[closest_timestamp_index] == 0:
                     closest_timestamp_index += 1
@@ -236,7 +248,8 @@ class VoiceManipulation:
             self.segment += ([(so[0][0], 0)] + so + [(so[-1][0], 0)])
         self.segment += [(self.recorder.record_table.getSize() /
                           self.server_sr, 0)]
-        self.send_to_server(self.segment)
+
+        # self.send_to_server(self.segment)
 
     def send_to_server(self, segment):
         segment_bytes = pickle.dumps(segment)
@@ -257,7 +270,7 @@ if __name__ == "__main__":
     if ON_PI:
         c = PyoClient(audio_backend="jack", default_audio_device="usb")
     else:
-        c = PyoClient(default_audio_device="usb")
+        c = PyoClient(default_audio_device="built-in")
     v = VoiceManipulation(c.audio_server.getSamplingRate(), 4.0)
 
     def shutdown():

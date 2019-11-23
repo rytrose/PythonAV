@@ -22,7 +22,7 @@ class Sample:
             self.table = table
             self.samples = self.table.getSize()
             self.duration = self.table.getDur()
-            self.sr = self.table.getRate()
+            self.sr = self.table.getSamplingRate()
 
         self.table_reader = TableRead(self.table, freq=1 / self.duration)
         self.table_reader.setLoop(loop)

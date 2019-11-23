@@ -7,11 +7,15 @@ from pyo import *
 from communication.osc_client import OSCClient
 from pyo_extensions.pyo_client import PyoClient
 
+ON_PI = False
 
 class VoiceManipulationServer:
     def __init__(self):        
+        remote_address = "Ryans-MacBook-Pro.local"
+        if ON_PI:
+            remote_address = "rytrose-pi-zero-w.local"
         self.osc_client = OSCClient(local_address="Ryans-MacBook-Pro.local", local_port=5001, 
-                            remote_address="rytrose-pi-zero-w.local", remote_port=5000)
+                            remote_address=remote_address, remote_port=5000)
         self.osc_client.map("/segment", self.on_segment)
         self.osc_client.begin()
 
