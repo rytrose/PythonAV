@@ -38,15 +38,16 @@ class MidoClient:
                 print("%d:\t%s" % (i, input_name))
 
             input_device_ids = input("Please enter input device IDs separated with spaces: ")
-            input_device_ids = [int(device_id) for device_id in input_device_ids.split(" ")]
+            if input_device_ids != "":
+                input_device_ids = [int(device_id) for device_id in input_device_ids.split(" ")]
 
-            for device_id in input_device_ids:
-                try:
-                    port = mido.open_input(inputs[device_id])
-                    self.input_ports[inputs[device_id]] = port
-                    print("Connected to input device %s" % inputs[device_id])
-                except Exception as e:
-                    print("Unable to open input device %s: %s" % (inputs[device_id], e))
+                for device_id in input_device_ids:
+                    try:
+                        port = mido.open_input(inputs[device_id])
+                        self.input_ports[inputs[device_id]] = port
+                        print("Connected to input device %s" % inputs[device_id])
+                    except Exception as e:
+                        print("Unable to open input device %s: %s" % (inputs[device_id], e))
 
             outputs = mido.get_output_names()
 
@@ -55,15 +56,16 @@ class MidoClient:
                 print("%d:\t%s" % (i, output_name))
 
             output_device_ids = input("Please enter out device IDs separated with spaces: ")
-            output_device_ids = [int(device_id) for device_id in output_device_ids.split(" ")]
+            if output_device_ids != "":
+                output_device_ids = [int(device_id) for device_id in output_device_ids.split(" ")]
 
-            for device_id in output_device_ids:
-                try:
-                    port = mido.open_output(outputs[device_id])
-                    self.input_ports[outputs[device_id]] = port
-                    print("Connected to output device %s" % outputs[device_id])
-                except Exception as e:
-                    print("Unable to open output device %s: %s" % (outputs[device_id], e))
+                for device_id in output_device_ids:
+                    try:
+                        port = mido.open_output(outputs[device_id])
+                        self.output_ports[outputs[device_id]] = port
+                        print("Connected to output device %s" % outputs[device_id])
+                    except Exception as e:
+                        print("Unable to open output device %s: %s" % (outputs[device_id], e))
 
 if __name__ == '__main__':
     m = MidoClient(prompt_for_devices=True)

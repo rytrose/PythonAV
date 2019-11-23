@@ -17,7 +17,7 @@ from utils.utils import quantize
 
 
 class VoiceCapture:
-    """This object captures input, expecting voice, and creates sound objects that follow the pitch contour of the speech."""
+    """VoiceCapture captures input, expecting voice, and creates sound objects that follow the pitch contour of the speech."""
 
     def __init__(self, server_sr, length):
         self.server_sr = server_sr
