@@ -16,16 +16,39 @@ class Midifier:
         self.output_device = output_device
         self.mido_client = MidoClient(output_devices=[self.output_device])
         self.port = self.mido_client.output_ports[self.output_device]
-        self.sampling_interval = 0.1
+        self.sampling_interval = 0.05
         self.metro = Metro(time=self.sampling_interval)
         self.send_trig_func = None
+
+    def process_segment(self, segment):
+        times = [tf[0] for tf in segment]
+        freqs = [tf[1] for tf in segment]
+        return times, freqs
+
+    def midi_note_at_t(self, t, times, freqs):
+        i, t0 = quantize(t, times, with_index=True)
+        y0 = freqs[i]
+
+        if i < 0:
+            j = i + 1
+        elif i == len(times) - 1:
+            j = i - 1
+        else:
+            j = i + 1 if t > t0 else i - 1
+
+        f = linear_interpolate(t, t0, y0, times[j], freqs[j])
+
+        midi_note = 0
+        if f > 0:
+            midi_note = math.floor(hz_to_note_number(f))
+
+        return midi_note
 
     def send_segment(self, segment, loop=False):
         if type(segment) == tuple:
             segment = segment[0]
 
-        self.times = [self.t[0] for self.t in segment]
-        self.freqs = [self.t[1] for self.t in segment]
+        self.times, self.freqs = self.process_segment(segment)
 
         self.start = time.time()
         self.end = segment[-1][0]
@@ -39,21 +62,7 @@ class Midifier:
     def send_midi(self, loop):
         if self.t < self.end:
             self.t = time.time() - self.start
-            i, t0 = quantize(self.t, self.times, with_index=True)
-            y0 = self.freqs[i]
-
-            if i < 0:
-                j = i + 1
-            elif i == len(self.times) - 1:
-                j = i - 1
-            else:
-                j = i + 1 if self.t > t0 else i - 1
-
-            f = linear_interpolate(self.t, t0, y0, self.times[j], self.freqs[j])
-            
-            midi_note = 0
-            if f > 0: 
-                midi_note = math.floor(hz_to_note_number(f))
+            midi_note = self.midi_note_at_t(self.t, self.times, self.freqs)
 
             if midi_note != self.prev_midi_note:
                 if midi_note == 0:
@@ -61,6 +70,7 @@ class Midifier:
                     if self.prev_midi_note is not None:
                         old_off = mido.Message('note_off', note=self.prev_midi_note, velocity=32)
                         self.port.send(old_off)
+                    self.prev_midi_note = None
                 else:
                     # self.start new note
                     new_on = mido.Message('note_on', note=midi_note, velocity=32)
@@ -71,7 +81,7 @@ class Midifier:
                         old_off = mido.Message('note_off', note=self.prev_midi_note, velocity=32)
                         self.port.send(old_off)
 
-            self.prev_midi_note = midi_note
+                    self.prev_midi_note = midi_note
         else:
             # end last note
             last_off = mido.Message('note_off', note=self.prev_midi_note, velocity=32)
@@ -87,3 +97,23 @@ class Midifier:
 
     def stop_sending(self):
         self.metro.stop()
+
+    def midify(self, segment):
+        times, freqs = self.process_segment(segment)
+        length = segment[-1][0]
+
+        midi_notes = []
+
+        t = 0
+        prev_midi_note = self.midi_note_at_t(t, times, freqs)
+        note_on_time = 0.0
+        while t < length:
+            midi_note = self.midi_note_at_t(t, times, freqs)
+            if midi_note != prev_midi_note:
+                # end prev note
+                midi_notes.append((prev_midi_note, note_on_time, t))
+                note_on_time = t
+                prev_midi_note = midi_note
+            t += self.sampling_interval
+
+        midi_notes = list(filter(lambda note: note[0] != 0, midi_notes))
