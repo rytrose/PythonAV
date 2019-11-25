@@ -72,7 +72,7 @@ class VoiceCapture:
         self.process_for_playback()
 
         # Play back masked sample and basic synthesized sound objects
-        self.play()
+        # self.play()
 
     def pitch_processing(self):
         """Cleans up the raw Yin pitch detection."""
@@ -158,6 +158,30 @@ class VoiceCapture:
                     end_sample = math.floor(self.segment[i][0] * self.playback.sr)
                     for sample in range(start_sample, end_sample):
                         self.playback.table.put(0.0, pos=sample)
+
+        attack_samples = math.floor(0.01 * self.playback.sr)
+        decay_samples = math.floor(0.05 * self.playback.sr)
+        i = 0
+        while i < self.playback.table.getSize():  # apply basic attack/decay to not masked portions to not pop
+            sample = self.playback.table.get(i)
+            if sample == 0.0:
+                i += 1
+                continue
+            start = i
+            end = start + 1
+            end_val = self.playback.table.get(end)
+            while end_val != 0.0 or end == len(self.playback.table):
+                end += 1
+                end_val = self.playback.table.get(end)
+            attack_i = start
+            while attack_i < start + attack_samples or attack_i == end:  # attack
+                self.playback.table.put(self.playback.table.get(attack_i) * ((attack_i - start) / attack_samples), pos=attack_i)
+                attack_i += 1
+            decay_i = end
+            while decay_i > end - decay_samples or decay_i == start:  # decay
+                self.playback.table.put(self.playback.table.get(decay_i) * ((end - decay_i) / decay_samples), pos=decay_i)
+                decay_i -= 1
+            i = end
 
         # self.ls = Linseg(self.segment, loop=True)
         # self.saw = SuperSaw(freq=self.ls).mix(2).out()

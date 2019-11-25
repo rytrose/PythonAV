@@ -24,8 +24,7 @@ class Sample:
             self.duration = self.table.getDur()
             self.sr = self.table.getSamplingRate()
 
-        self.table_reader = TableRead(self.table, freq=1 / self.duration)
-        self.table_reader.setLoop(loop)
+        self.table_reader = TableRead(self.table, freq=1 / self.duration, loop=loop)
         self.processing = processing
         self.parallel_processing = parallel_processing
         self.play_original = play_original
