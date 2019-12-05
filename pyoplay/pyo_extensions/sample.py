@@ -8,7 +8,7 @@ class Sample:
         Args:
             path (str, optional): Path to a sound file to play. Defaults to None.
             table (pyo.PyoTableObject, optional): A table of audio data to play. Defaults to None.
-            processing (List, optional): A list of tuples of (pyo.PyoObject, kwargs) which define
+            processing (list, optional): A list of tuples of (pyo.PyoObject, kwargs) which define
             a signal processing effects to apply to the audio data. Defaults to None.
             parallel_processing (bool, optional): Determines whether or not effects are applied to 
             the original audio (True), or to the output of the previous effect (False). Defaults to True.

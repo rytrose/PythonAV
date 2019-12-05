@@ -49,7 +49,6 @@ class VoiceCapture:
         self.attacks = []
         self.attack_timestamps = []
         self.sound_objects = []
-        self.pitch_contour = None
         self.playback = None
         self.playing = False
         self.record_callback = None
@@ -204,7 +203,6 @@ class VoiceCapture:
     def stop(self):
         """Stops playback of the recorded sample and basic synthesized sound object."""
         self.playing = False
-        self.pitch_contour.stop()
         self.playback.stop()
 
     def record(self, length=None, wait=False, record_callback=None):
