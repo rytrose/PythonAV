@@ -3,8 +3,10 @@ import sys
 import threading
 import signal
 import platform
+from voices.high_voice import HighVoice
 from pyo.lib.analysis import Scope
 from pyo.lib.filters import Average
+from pyo.lib.generators import ChenLee, Lorenz
 
 from pyo.lib.randoms import Xnoise
 from voices.low_voice import LowVoice
@@ -40,12 +42,14 @@ else:
 
 avg_lux = Average(lux, size=math.floor(200 * (1 / lux_T)))
 
-# Create low voice
+# Create voices
 pitch_classes = [0, 2, 3, 4, 6, 8, 9]
 low_voice = LowVoice(avg_lux, pitch_classes)
+high_voice = HighVoice(avg_lux, pitch_classes)
 
 # Start voices
 low_voice.out()
+high_voice.out()
 
 if platform.system() == "Darwin":
     scope_lux = Scope(lux, length=1, wintitle="Lux")
